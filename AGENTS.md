@@ -40,8 +40,11 @@ separate commands and journals. Apply them only within the owner's requested sco
    profile covers QN65LS03FWFXZA, Tizen 9, build
    `T-RSMFAKUC-0090-REL-202607141953`. The explicit `--profile s95c-2220` covers
    QN55S95CAFXZA, Tizen 9, ARMv7, build `T-PTMCAKUC-0090-REL-202603190200`
-   (menu firmware 2220.4). Its live executable/manifest/unit preimages and native
-   disable/readback/restore trial were validated separately. Do not bypass build
+   (menu firmware 2220.4). The explicit `--profile q65d-2123` covers
+   QN55Q65DAGXZD, Tizen 9, ARMv7, build `T-NKLDUABC-0090-REL-202603190159`
+   (menu firmware 2123.9). Non-Frame profiles require matching live
+   executable/manifest/unit preimages and a successful native
+   disable/readback/restore trial before batch apply. Do not bypass build
    checks or merely replace a build string to support another TV. The app path
    also requires owner UID 5001.
    All device commands acquire temporary root, including inspect/status/audit.
@@ -75,14 +78,20 @@ disables ArtApp and Samsung home's Art tab. The S95C has no Art Mode (feature fl
 `homeui.artgallery_support` is false), yet `art_start.sh` launches ArtApp at every
 boot to sync art from Samsung's server. Ambient Mode is the separate
 `ambient-support` app and stays enabled.
-Other optional groups, certificates, Auto Update and blanket service scopes are
-rejected. Application requires the successful matching trial journal plus pinned
+All Q65D device and recovery commands require `--profile q65d-2123` before the
+command. That profile inventories 23 voice apps and 19 voice units (includes
+`virtual-mic`, omits absent `wakeupless`/`farfieldvoice` units), plus
+`ambient-sound` and an assessed `wifi-presence` group. This build has no vendor
+startup-guard drop-ins under `/opt/usr/share/systemd/system`. Other optional
+groups, certificates, Auto Update and blanket service scopes are rejected.
+Application requires the successful matching trial journal plus pinned
 preimages. The S95C's AOV dashboard uses `dotnet-loader` and its inhouse apps use
-`dotnet-launcher-inhouse`; both runtimes are pinned. Process checks require the
-exact DLL argument and a known runtime, not a name substring. The separate
-read-only `compatibility-audit` and `network-audit` commands gather registrations,
-preimages, dependencies, ConnMan radio power and Ethernet state without recording
-audio or packets. Do not infer that radio-off stops Wi-Fi presence.
+`dotnet-launcher-inhouse`; both runtimes are pinned on the ARMv7 profiles.
+Process checks require the exact DLL argument and a known runtime, not a name
+substring. The separate read-only `compatibility-audit` and `network-audit`
+commands gather registrations, preimages, dependencies, ConnMan radio power and
+Ethernet state without recording audio or packets. Do not infer that radio-off
+stops Wi-Fi presence.
 
 | Command | Effect and limits |
 | --- | --- |

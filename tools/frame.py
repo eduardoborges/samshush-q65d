@@ -26,6 +26,7 @@ ASSETS = HERE / "assets"
 PROFILES = {
     "frame": HERE / "profile.json",
     "s95c-2220": HERE / "profiles/s95c-2220.json",
+    "q65d-2123": HERE / "profiles/q65d-2123.json",
 }
 ACTIVE_PROFILE = "frame"
 # Keep the pinned transport isolated from globally installed packages.
