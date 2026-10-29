@@ -107,8 +107,12 @@ class AppControlTests(unittest.TestCase):
             (self.journal / "complete").touch()
 
     def run_control(self, mode, scenario="normal"):
-        script = device_scripts.APP_CONTROL.replace("@@MODE@@", mode).replace(
-            "@@APPS@@", APP
+        script = (
+            device_scripts.APP_CONTROL.replace("@@MODE@@", mode)
+            .replace("@@APPS@@", APP)
+            .replace("@@BUILD@@", "T-RSMFAKUC-0090-REL-202607141953")
+            .replace("@@PROCESS_IDENTITY@@", device_scripts.PROCESS_IDENTITY)
+            .replace("@@TRIAL_PREFLIGHT@@", "")
         )
         for original, target in (
             ("/opt/usr/home/owner/share/frame-voice-apps-v2", self.journal),
