@@ -87,6 +87,21 @@
         "wifi-presence.service"
       ],
       "reason": "LAN presence service is active on this build while Ethernet is in use; radio power is separate. Not applied until owner opts in after voice trial."
+    },
+    "advertising": {
+      "application_ids": [
+        "com.samsung.tv.adagent-service",
+        "com.samsung.tv.targeted-ad-service"
+      ],
+      "systemd_units": [
+        "adagent-service.service"
+      ],
+      "reason": "Live Q65D: adagent-service and targeted-ad-service were active. Block these; keep shared pisa-service for account/consent. CoBA smarthub adagent package has a missing bin DLL on this build and is deferred."
+    },
+    "smarthub-ads": {
+      "application_ids": [],
+      "systemd_units": [],
+      "reason": "com.samsung.tv.coba.adagent is registered but its pkgmgr executable path is missing on disk (empty bin/). Deferred until a valid preimage exists."
     }
   },
   "applications": {
@@ -185,6 +200,14 @@
     "com.samsung.tv.ambient-sound": {
       "executable": "/opt/usr/apps/com.samsung.tv.ambient-sound/bin/ambient-sound",
       "manifest": "/opt/share/packages/com.samsung.tv.ambient-sound.xml"
+    },
+    "com.samsung.tv.adagent-service": {
+      "executable": "/opt/usr/apps/com.samsung.tv.pisa-service/bin/adagent-service",
+      "manifest": "/opt/share/packages/com.samsung.tv.pisa-service.xml"
+    },
+    "com.samsung.tv.targeted-ad-service": {
+      "executable": "/opt/usr/apps/com.samsung.tv.targeted-ad-service/bin/targeted-ad-service",
+      "manifest": "/opt/share/packages/com.samsung.tv.targeted-ad-service.xml"
     }
   },
   "startup_guards": [],
@@ -263,7 +286,12 @@
     "/usr/lib/systemd/system/wifi-presence.path": "03caae12e4fe516057da6d919d7e987953c991c5ad5add19e2a73697652bcd34",
     "/usr/lib/systemd/system/wifi-presence.service": "a2f4f11950f547507675522bd92a90b2a56902906b66fd54a262a1a967baf2e7",
     "/usr/bin/dotnet-loader": "756a3796e1aec765a9cf7e5b1c0fcf00864205e70bd028c94e587a21a0a381c5",
-    "/usr/bin/dotnet-launcher-inhouse": "3186666daae073ec8528ff277b71ea071f71e8a30fa58126b4db6494104e55cf"
+    "/usr/bin/dotnet-launcher-inhouse": "3186666daae073ec8528ff277b71ea071f71e8a30fa58126b4db6494104e55cf",
+    "/opt/usr/apps/com.samsung.tv.pisa-service/bin/adagent-service": "a1715879641b36e84d671986689fff560d4886208f85b6e5ed54e4a100e238ba",
+    "/opt/share/packages/com.samsung.tv.pisa-service.xml": "3a8c6305a25941d41fb0dc994b480c6091cdde9b748e43b7c151b30b500a65f9",
+    "/opt/usr/apps/com.samsung.tv.targeted-ad-service/bin/targeted-ad-service": "463ab05c4da03867c935ce3b7b743e79ba89a4e5cadc7b07b8ba0979d998f0b7",
+    "/opt/share/packages/com.samsung.tv.targeted-ad-service.xml": "3fad6a3424392cad2d6c51c353ded2c3ed7668e8e570edaf7eeb6f9ac63c9221",
+    "/usr/lib/systemd/system/adagent-service.service": "6c159c9e9572fa4e5a7b897ebfe55e1113f0fe4dffbd6eb8b6a4a6482f4fc813"
   },
   "runtime_validated": true,
   "persistence": "Native app flags and ambient-sound disable verified by launch denial on 2026-10-29. Voice and wifi-presence masks applied for current boot only; reboot persistence not yet tested. No startup guards on this build. Startup hook not installed.",
