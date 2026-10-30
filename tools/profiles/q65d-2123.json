@@ -113,7 +113,7 @@
         "issue_report_agent.service",
         "emergency-log-transmitter.service"
       ],
-      "validation": "Unit, app and helper hashes pinned from the 2026-10-30 live audit. Not applied."
+      "validation": "Live apply and mask readback passed on 2026-10-30. Retained features and a fresh reboot are not verified."
     },
     "presence-sensing": {
       "application_ids": [],
@@ -132,7 +132,7 @@
       ],
       "purpose": "Stop separate Wi-Fi motion and user-awareness services.",
       "tradeoffs": "Presence-based automatic dimming, power saving and Art wake can be lost. Manual Art Mode and networking are retained.",
-      "validation": "Unit, app and helper hashes pinned from the 2026-10-30 live audit. Not applied."
+      "validation": "Live apply and mask readback passed on 2026-10-30. Retained features and a fresh reboot are not verified."
     },
     "analytics-context": {
       "application_ids": [],
@@ -147,7 +147,7 @@
       "purpose": "Stop the context-aware collector and data logger, independently of existing diagnostic reporting controls.",
       "tradeoffs": "Context-based personalization is unavailable. Shared account consent and PISA remain enabled.",
       "stop_grace_seconds": 20,
-      "validation": "Unit, app and helper hashes pinned from the 2026-10-30 live audit. Not applied."
+      "validation": "Live apply and mask readback passed on 2026-10-30. Retained features and a fresh reboot are not verified."
     },
     "remote-support": {
       "application_ids": [],
@@ -163,7 +163,7 @@
       ],
       "purpose": "Stop optional remote-support and retail-management daemons, including their systemd-backed D-Bus activation.",
       "tradeoffs": "Vendor remote support and remote shop management unavailable. Keep Maintenance Mode backup/restore, owner SDB and core remote navigation.",
-      "validation": "Unit, app and helper hashes pinned from the 2026-10-30 live audit. Not applied."
+      "validation": "Live apply and mask readback passed on 2026-10-30. Retained features and a fresh reboot are not verified."
     },
     "remote-pc": {
       "application_ids": [
@@ -177,7 +177,7 @@
       ],
       "purpose": "Block the Remote PC launcher and its separate service while retaining zone isolation and the shared browser.",
       "tradeoffs": "Remote PC unavailable. This control is not a finding that this firmware is vulnerable.",
-      "validation": "Unit, app and helper hashes pinned from the 2026-10-30 live audit. Not applied."
+      "validation": "Live apply and mask readback passed on 2026-10-30. Retained features and a fresh reboot are not verified."
     },
     "gaming-backend": {
       "application_ids": [
@@ -190,7 +190,8 @@
       ],
       "purpose": "Block Gaming Hub backend app registrations and startup paths separately from existing frontend blocks.",
       "tradeoffs": "Gaming Hub services unavailable. Preserve Game Mode, Game Bar, HDMI ALLM/VRR and gamepad drivers.",
-      "validation": "Unit, app and helper hashes pinned from the 2026-10-30 live audit. Not applied."
+      "validation": "Live apply and mask readback passed on 2026-10-30. Retained features and a fresh reboot are not verified.",
+      "note": "Applying these apps stopped gamepad-service, which stays D-Bus activated. Controller use is untested."
     },
     "optional-delivery": {
       "application_ids": [
@@ -458,9 +459,9 @@
     "/usr/share/packages/org.tizen.was-builtinupgrade.xml": "d112a43eb47e9b363a97dc73551c99407b29b4a6f34f361d339ee6a2c25dcd3c"
   },
   "runtime_validated": true,
-  "persistence": "Native app flags and ambient-sound survived the 2026-10-30 reboot. Voice, wifi-presence and advertising masks last for one boot. The startup hook is installed and run tested, but a fresh reboot has not verified it. No startup guards on this build.",
+  "persistence": "Native app flags and ambient-sound survived the 2026-10-30 reboot. Runtime masks last for one boot. The startup hook reapplies voice, wifi-presence, advertising, reporting, presence-sensing, analytics-context, remote-support, remote-pc and gaming-backend. It is installed and run tested, but a fresh reboot has not verified it. No startup guards on this build.",
   "verification_scope": "Live apply 2026-10-29: 23 voice apps launch-denied, ambient-sound launch-denied, 19 voice units masked, wifi-presence masked. Cold boot / power-cycle not verified.",
-  "last_verified_utc": "2026-10-29T12:09:54Z",
+  "last_verified_utc": "2026-10-30T18:04:00Z",
   "service_audit_units": [
     "com.samsung.tv.AICompanionAgent.service",
     "com.samsung.tv.ai-interpreter-service.service",

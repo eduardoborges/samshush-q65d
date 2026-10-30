@@ -82,9 +82,12 @@ All Q65D device and recovery commands require `--profile q65d-2123` before the
 command. That profile inventories 23 voice apps and 19 voice units (includes
 `virtual-mic`, omits absent `wakeupless`/`farfieldvoice` units), plus
 `ambient-sound` and the assessed `wifi-presence` and `advertising` groups. The
-`reporting`, `presence-sensing`, `analytics-context`, `remote-support`, `remote-pc`,
-`gaming-backend` and `optional-delivery` groups are pinned from a live audit and
-have not been applied. `visual-analysis` and `screen-recognition` need a reduced
+`reporting`, `presence-sensing`, `analytics-context`, `remote-support`, `remote-pc`
+and `gaming-backend` groups passed live apply and mask readback. `optional-delivery`
+is pinned but not applied, because it turns off automatic app updates and app
+synchronization. Applying the `gaming-backend` apps also stopped `gamepad-service`,
+which stays D-Bus activated through its busname; controller use is untested.
+`visual-analysis` and `screen-recognition` need a reduced
 definition on this build, and `ai-models` and `voice-launchers` are absent. This
 build has no vendor startup-guard drop-ins under `/opt/usr/share/systemd/system`.
 Other optional groups, certificates, Auto Update and blanket service scopes are
