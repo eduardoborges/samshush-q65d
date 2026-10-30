@@ -316,6 +316,132 @@
         "com.samsung.tv.smartthingsfind-ondemand"
       ],
       "systemd_units": []
+    },
+    "visual-analysis": {
+      "application_ids": [],
+      "systemd_units": [
+        "screen-analysis-service-manager.service",
+        "contents-cognition-service-manager.service"
+      ],
+      "process_paths": [
+        "/usr/bin/screen-analysis-service-manager",
+        "/usr/bin/contents-cognition-service-manager",
+        "/usr/bin/screen-analysis-discovery-service",
+        "/usr/bin/sa-ui-detector",
+        "/usr/bin/subtitle-recog-service"
+      ],
+      "purpose": "Stop the separate visual-analysis managers and verify their native helpers are absent.",
+      "tradeoffs": "Disables food/text discovery and subtitle recognition/accessibility functions. Normal subtitles, HDMI and manual Art require retained-feature checks. Does not prohibit other processes from reading model files.",
+      "validation": "Live apply, selected-process absence and automatic rollback/restart verified on the supported TV. Retained-feature and fresh reboot checks remain separate."
+    },
+    "gaming-backend": {
+      "application_ids": [
+        "com.samsung.tv.ghdaemon",
+        "com.samsung.tv.ghservice"
+      ],
+      "systemd_units": [
+        "com.samsung.tv.ghdaemon.path",
+        "com.samsung.tv.ghdaemon.service"
+      ],
+      "purpose": "Block Gaming Hub backend app registrations and startup paths separately from existing frontend blocks.",
+      "tradeoffs": "Gaming Hub services unavailable. Preserve Game Mode, Game Bar, HDMI ALLM/VRR and gamepad drivers.",
+      "validation": "Live apply, mask/flag readback and selected-process checks passed on the supported TV. Retained-feature and fresh reboot checks remain separate; full restore not exercised."
+    },
+    "remote-support": {
+      "application_ids": [],
+      "systemd_units": [
+        "remote-management.service",
+        "samsung-easy-support.service",
+        "remote-shop-care-hub.service"
+      ],
+      "process_paths": [
+        "/usr/bin/rmdemon",
+        "/usr/bin/ses-service",
+        "/usr/bin/rscmdemon"
+      ],
+      "purpose": "Stop optional remote-support and retail-management daemons, including their systemd-backed D-Bus activation.",
+      "tradeoffs": "Vendor remote support and remote shop management unavailable. Keep Maintenance Mode backup/restore, owner SDB and core remote navigation.",
+      "validation": "Live apply, mask readback and selected-process checks passed on the supported TV. Retained-feature and fresh reboot checks remain separate; full restore not exercised."
+    },
+    "remote-pc": {
+      "application_ids": [
+        "org.tizen.remotepc"
+      ],
+      "systemd_units": [
+        "org.tizen.remotepc.service"
+      ],
+      "purpose": "Block the Remote PC launcher and its separate service while retaining zone isolation and the shared browser.",
+      "tradeoffs": "Remote PC unavailable. This control is not a finding that this firmware is vulnerable.",
+      "validation": "Live apply, mask/flag readback and selected-process checks passed on the supported TV. Retained-feature and fresh reboot checks remain separate; full restore not exercised.",
+      "process_paths": [
+        "/opt/usr/apps/org.tizen.remotepc/bin/remotepc_manager"
+      ]
+    },
+    "voice-launchers": {
+      "application_ids": [
+        "com.samsung.tv.alexa-jump-starter"
+      ],
+      "systemd_units": [],
+      "purpose": "Block the separately registered Alexa startup app without changing the deployed voice journal.",
+      "tradeoffs": "Alexa startup unavailable. Does not establish complete microphone capture denial.",
+      "validation": "Present in extracted firmware but absent from the tested TV app registry; not applied. Verify registration before use."
+    },
+    "ai-models": {
+      "application_ids": [],
+      "systemd_units": [
+        "com.samsung.tv.ai-interpreter-service.path",
+        "com.samsung.tv.ai-interpreter-service.service"
+      ],
+      "purpose": "Stop the remaining AI interpreter and its path activation before separately removing the selected model packages.",
+      "tradeoffs": "AI interpretation and related translation features are unavailable. Package removal is a separate explicit command."
+    },
+    "analytics-context": {
+      "application_ids": [],
+      "systemd_units": [
+        "com.samsung.tv.context-aware-service.path",
+        "com.samsung.tv.context-aware-service.service",
+        "data-service.service"
+      ],
+      "process_paths": [
+        "/usr/bin/data-service"
+      ],
+      "purpose": "Stop the context-aware collector and data logger, independently of existing diagnostic reporting controls.",
+      "tradeoffs": "Context-based personalization is unavailable. Shared account consent and PISA remain enabled.",
+      "stop_grace_seconds": 20
+    },
+    "presence-sensing": {
+      "application_ids": [],
+      "systemd_units": [
+        "com.samsung.tv.wifi-motion-mgr.service",
+        "com.samsung.tv.wifi-motion-mgr-setcap.service",
+        "user-presence.service",
+        "ua-manager.service",
+        "ambient-ua-agent.service"
+      ],
+      "process_paths": [
+        "/usr/bin/wifi-motion-mgr",
+        "/usr/sbin/user-presence",
+        "/usr/bin/ua-manager",
+        "/usr/bin/ambient-ua-agent"
+      ],
+      "purpose": "Stop separate Wi-Fi motion and user-awareness services.",
+      "tradeoffs": "Presence-based automatic dimming, power saving and Art wake can be lost. Manual Art Mode and networking are retained."
+    },
+    "optional-delivery": {
+      "application_ids": [
+        "org.tizen.was-appsync",
+        "org.tizen.was-appupdate",
+        "org.tizen.was-builtinupgrade"
+      ],
+      "systemd_units": [
+        "was-background-update.path",
+        "was-background-update.service"
+      ],
+      "process_paths": [
+        "/usr/bin/was_background_update"
+      ],
+      "purpose": "Disable optional app synchronization/update helpers and background delivery before package removal.",
+      "tradeoffs": "Automatic app updates and app synchronization are unavailable. Shared package management, appbinary-manager and the manual firmware updater remain enabled."
     }
   },
   "verified_optional_controls": {
@@ -377,5 +503,28 @@
     "voice_mask_readback_at_seconds": 59.04,
     "service_group_reloads": 7,
     "performance_comparison": "One warm check and one physical power-cycle application. Prior wrapper timing was from a different boot; no controlled whole-TV speedup claim."
-  }
+  },
+  "service_audit_units": [
+    "com.samsung.tv.AICompanionAgent.service",
+    "com.samsung.tv.ai-interpreter-service.service",
+    "com.samsung.tv.wifi-motion-mgr.service",
+    "com.samsung.tv.wifi-motion-mgr-setcap.service",
+    "user-presence.service",
+    "ua-manager.service",
+    "ambient-ua-agent.service",
+    "data-service.service",
+    "com.samsung.tv.context-aware-service.service",
+    "com.samsung.tv.context-aware-service.path",
+    "awm-service.service",
+    "was-background-update.service",
+    "appbinary-manager.service",
+    "debug-shell.service",
+    "socite-remote.service",
+    "ssc-service.service",
+    "ssdm-service.service",
+    "hdmicec-service.service",
+    "mini-hdmicec-service.service",
+    "remoteapp.service",
+    "sdbd.service"
+  ]
 }

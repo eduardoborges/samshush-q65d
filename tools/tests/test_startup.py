@@ -79,6 +79,7 @@ elif name=="chsmack":
  if args[0]=="-T": labels.pop(inode(args[1]),None); save()
  elif args[0]!="-a": print(args[0]+' access="_"'+(' transmute="TRUE"' if labels.get(inode(args[0])) else ""))
 elif name=="chown": pass
+elif name=="nsenter": os.execvp(args[1], args[1:])
 elif name=="systemctl":
  if args[0]=="show":
   key=args[args.index("-p")+1]
@@ -88,7 +89,16 @@ elif name=="systemctl":
  else: sys.exit(99)
 else: sys.exit(99)
 """)
-        for name in ("id", "stat", "cp", "sha256sum", "chsmack", "chown", "systemctl"):
+        for name in (
+            "id",
+            "stat",
+            "cp",
+            "sha256sum",
+            "chsmack",
+            "chown",
+            "systemctl",
+            "nsenter",
+        ):
             executable = self.bin / name
             executable.write_text(
                 f'#!/bin/sh\nexec {shlex.quote(sys.executable)} {shlex.quote(str(self.helper))} {name} "$@"\n'
@@ -101,6 +111,9 @@ else: sys.exit(99)
             "voice_privacy": {"systemd_units": ["voice.service"]},
             "optional_controls": {"ads": {"systemd_units": ["ads.service"]}},
         }
+        self.policy["optional_controls"].update(
+            {name: {"systemd_units": []} for name in startup.remove_packages.GROUPS}
+        )
         self.package = startup.bundle(
             self.policy, lambda action, scope, **kwargs: "true", BASE / "assets"
         )
@@ -261,6 +274,23 @@ else: sys.exit(99)
                 f"{hashlib.sha256((self.boot / name).read_bytes()).hexdigest()}  {name}\n"
                 for name in names
             )
+        )
+
+    def test_worker_reports_returned_or_incomplete_package_removal(self):
+        self.install()
+        receipt = self.device / "opt/usr/share/samshush-removals-v1"
+        receipt.mkdir()
+        self.replace_installed(
+            "packages.status", "echo 'Package registered again' >&2; exit 1\n"
+        )
+        worker = startup.substitute(startup.COMMON + startup.WORKER, "test")
+        result = self.run_shell(worker)
+        self.assertNotEqual(result.returncode, 0)
+        log = (self.device / "run/samshush-boot.log").read_text()
+        self.assertIn("Package registered again", log)
+        self.assertNotIn("STARTUP COMPLETE", log)
+        self.assertEqual(
+            (self.device / "run/samshush-boot.result").read_text(), "boot-one 1\n"
         )
 
     def test_worker_applies_once_after_boot_and_rejects_partial_apply(self):

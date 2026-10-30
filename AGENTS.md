@@ -105,9 +105,10 @@ stops Wi-Fi presence.
 | `hdmi-audit` | Read Anynet+/CEC settings and connected-device metadata; sends no power or input-switch commands. |
 | `privacy-audit` | Read SmartThings sensor app flags, two known sound settings, Wi-Fi/ACR units and dependencies; does not change settings or launch apps. |
 | `voice-audit` | Inspect processes and capture metadata; does not record audio. |
+| `service-audit` | Read all system service/unit-file listings, profile and investigation dependencies, app registrations, native/managed process identities and selected presence settings. No app launch, media/packet capture or settings write. |
 | `debloat-audit` | Read optional-app registrations, dependencies, process identities and game-model/config metadata without capturing screen frames. |
-| `apps apply/status/verify/restore --group GROUP` | Independently control advertising, smarthub-ads, gaming, health, tv-plus, smartthings or smartthings-find apps; on the S95C, art. |
-| `services GROUP apply/status/restore` | Independently control advertising, reporting, wifi-presence, health, smartthings or screen-recognition runtime units; on the S95C, wifi-presence or shell-preload. |
+| `apps apply/status/verify/restore --group GROUP` | Control a profile app group with its own journal; CLI help lists available groups. |
+| `services GROUP apply/status/restore` | Control a profile runtime group with its own journal; CLI help lists available groups. |
 | `certificates apply/status/restore` | Overlay 11 verified certificate files in a separate journal, removing four emSign roots without disturbing voice state. Current boot only. |
 | `auto-update status/disable/restore` | Read or set the native Auto Update option; preserve its original value and leave manual updater services intact. |
 | `startup install/status/run/remove` | Save currently applied runtime scopes for automatic boot reapplication, inspect it, test the installed startup path, or restore the original startup script. |
@@ -177,6 +178,95 @@ controls applied. Then use the relevant restore commands, or reinstall after
 verifying a changed selection. On changed hook or backup bytes, stop and inspect
 rather than overwriting them. Keep scripts, profile, AGENTS.md and the concise,
 user-facing README synchronized when behavior changes.
+
+## Additional service groups
+
+The offline review covers both TV and One Connect source families, product and
+isolated-zone partitions, D-Bus entries, native service apps and bundled unit
+files. These declarations are not a runtime inventory or a safe-to-disable list.
+Use `service-audit` and save its private report before applying a new group.
+
+New independent groups preserve the deployed group lists and recovery journals:
+
+- `visual-analysis`: screen-analysis and contents-cognition managers; verifies
+  the discovery, UI-detector and subtitle-recognition helpers are absent. Loss:
+  food/text discovery and subtitle/accessibility recognition. Check ordinary
+  subtitles, HDMI, manual Art and accessibility. A mask does not prevent another
+  process reading a model, and these controls do not remove model packages.
+- `gaming-backend`: ghdaemon/ghservice native IDs and the ghdaemon service/path.
+  Preserve Game Mode, Game Bar, ALLM/VRR and controller support.
+- `remote-support`: Remote Management, Easy Support and Shop Care daemons. Keep
+  Maintenance Mode backup/restore, owner SDB and normal remote navigation.
+- `remote-pc`: Remote PC native ID and unit. Keep zone isolation and shared
+  browser/runtime services. No exploit on this firmware is established.
+- `voice-launchers`: Alexa's separate jump-starter native ID. Do not rewrite the
+  completed 25-app voice journal to add this registration.
+
+The first four groups passed live apply and selected-process checks on the supported
+TV. Visual-analysis rollback also restored its previously running managers. The
+Alexa jump-starter registration was absent, so voice-launchers was not applied.
+Full restore, retained-feature and fresh reboot validation remain separate. Apply
+each app group before its runtime group. Native helper checks reject missing executable paths
+before mutation and reject surviving helpers after stopping the manager, invoking
+the existing journaled rollback. Runtime status checks selected native helpers as
+well as masks. Unreadable executable links are accepted only for vanished tasks,
+confirmed kernel threads or fully exited single-thread processes; unreadable live
+userspace identities fail verification. Managed app verification stays in the
+native-app command.
+
+Before extending automatic boot reapplication, verify its current status, remove
+the installed hook, apply/verify the new groups, reinstall and run the startup
+path. Keep existing controls enrolled. An installed/run-tested hook is not a fresh
+reboot test; require a changed boot ID for that claim.
+
+The separately authorized `presence-sensing`, `analytics-context`, `ai-models` and
+`optional-delivery` groups cover the assessed motion/awareness, context, interpreter
+and background-delivery paths. Other model apps and generic installers remain
+audit-only. Preserve shared sensors, soundbar
+coordination (`ssc-service`/`ssdm-service`), input analysis/iACR, consent services
+and One Connect. Do not infer privacy behavior from names: content-grab-service
+has key-grabbing code, and route-webproxy is tied to ATSC3. Do not apply TV masks
+to the companion processor based on duplicated filenames.
+
+## Package removal
+
+Package/model removal is a separate, explicitly authorized action. The `packages`
+command targets exactly six removable TPKs: `com.samsung.tv.ai-interpreter-service`,
+`com.samsung.tv.contents-recognition-dbmgr`, `com.samsung.tv.screen-analysis-dbmgr`,
+`com.samsung.tv.screen-analysis-dbmgr-nb`, `com.samsung.tizen.samsung-analytics`, and
+`com.samsung.tv.context-aware-service`. Their package paths and removability are
+checked live; shared frameworks and firmware RPMs are excluded.
+
+First verify and remove the startup hook, then apply `apps apply --group
+optional-delivery` and the `optional-delivery`, `ai-models`, `analytics-context`
+and `presence-sensing` runtime groups. Existing groups and journals stay intact.
+The context group waits 20 seconds for normal shutdown, then terminates only its
+still-pending service cgroups. Other groups retain their existing stop behavior.
+
+Use `packages prepare --backup-dir .local/backups/NAME`, then
+`packages remove --backup-dir .local/backups/NAME`. Global TV and callback options
+still precede the command. Preparation journals original app flags, stops the
+selected packages and transfers a bounded archive through the existing callback
+transport; direct SDB file pull is unavailable on this TV. The archive is readable
+only by the verified SDK UID 901 while in transit. Verify its SHA-256 on the host
+before removing the temporary TV copy. `packages backup --backup-dir PATH` retries
+a failed transfer from its prepared receipt. Do not rerun preparation over a journal.
+
+The private archive includes installed files, app data, package metadata, hashes
+and separately recorded SMACK labels. The TV tar build cannot save arbitrary
+extended attributes; do not describe this as a complete filesystem image or a
+signed reinstallable TPK. No automatic package restore is implemented. Recovery
+may require original vendor packages, and a partial uninstall requires inspecting
+the receipt before continuing. Do not edit package databases to fake uninstall
+success or blindly erase a changed package tree.
+
+The root-owned receipt is `/opt/usr/share/samshush-removals-v1`. Native uninstall
+must remove package/app registrations, installed and owner-data directories,
+including the selected model resources; selected processes must be absent.
+`packages status` verifies this. Reinstall and run the startup hook afterward;
+it reapplies all completed runtime groups and rejects incomplete removal or a
+returned package. This detects reinstallation; it is not a barrier to privileged
+firmware or every downloader. A run test is not a fresh reboot test.
 
 ## Recovery and repeat runs
 
@@ -349,7 +439,7 @@ All tools support `--help`; invoke with `uv run --project tools tools/<name>.py`
 | `inspect_firmware.py` | Official ZIP + pinned unixtract `keys.ukf`; requires fresh extraction output; writes inventory/header metadata. OpenSSL required. |
 | `verify_images.py` | Decrypted sections + extractor logs; verifies CRCs and GPT, writes a local report. `--carve` explicitly writes partitions into a fresh directory. |
 | `check_msd_signatures.py` | Original MSDs + extraction logs + updater public key; prints signature results. OpenSSL required. Does not prove modified firmware acceptance. |
-| `inventory_components.py` | Extracted platform/factory-data trees; writes component/package evidence to `.local/reports/components`. |
+| `inventory_components.py` | One extracted family, or `--firmware-root firmware/filesystems` for both. Scans all provided partitions, systemd/D-Bus/bundled definitions and package manifests; preserves family/source context in `.local/reports/components`. |
 | `prepare_emudhra_removal.py RUN_NAME` | Exact baseline filesystem trees; writes non-installable certificate candidates under `.local/candidates/RUN_NAME`. Requires `rg` and OpenSSL. |
 | `build_payloads.py` | Optional .NET SDK 6.0.428; rebuilds TV helpers into fresh `.local/payload-build`, compares hashes, never deploys. Prebuilt assets need no host .NET. |
 

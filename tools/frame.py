@@ -100,6 +100,11 @@ def render(action, scope, *, certificate_journal=False, unit_group=None):
         if not selected_units:
             raise ValueError("No assessed units in this group")
     units = "\n".join(selected_units)
+    processes = (
+        p["optional_controls"][unit_group].get("process_paths", [])
+        if unit_group is not None
+        else []
+    )
     script = device_scripts.RUNTIME
     if "device_identity" in p and action == "apply":
         if scope != "voice" and not (scope == "services" and unit_group is not None):
@@ -110,6 +115,11 @@ def render(action, scope, *, certificate_journal=False, unit_group=None):
             + preimages(p, ["/usr/lib/systemd/system/" + u for u in selected_units])
             + script
         )
+    if unit_group is not None:
+        grace = p["optional_controls"][unit_group].get("stop_grace_seconds", 0)
+        if type(grace) is not int or not 0 <= grace <= 30:
+            raise ValueError("Invalid service stop grace period")
+        script = script.replace("STOP_GRACE_SECONDS=0", f"STOP_GRACE_SECONDS={grace}")
     if certificate_journal:
         script = script.replace(
             "STATE=/run/frame-runtime-v1", "STATE=/run/frame-certificates-v1"
@@ -125,6 +135,7 @@ def render(action, scope, *, certificate_journal=False, unit_group=None):
         "ARCH": p.get("device_identity", {}).get("architecture", "aarch64"),
         "CERTS": certs,
         "UNITS": units,
+        "PROCESSES": "\n".join(processes),
     }.items():
         script = script.replace(f"@@{key}@@", value)
     if "@@" in script:
@@ -133,6 +144,20 @@ def render(action, scope, *, certificate_journal=False, unit_group=None):
         return script
     encoded = base64.b64encode(script.encode()).decode()
     return f"printf %s {encoded} | base64 -d | nsenter --mount=/proc/1/ns/mnt /bin/bash"
+
+
+def render_service_audit():
+    p = policy()
+    units = sorted(
+        set(p.get("service_audit_units", []))
+        | {
+            unit
+            for entry in p["optional_controls"].values()
+            for unit in entry["systemd_units"]
+        }
+    )
+    script = device_scripts.SERVICE_AUDIT.replace("@@BUILD@@", p["build"])
+    return script.replace("@@UNITS@@", " ".join(shlex.quote(unit) for unit in units))
 
 
 def render_apps(action, *, sound_sensor=False, group=None, trial=False):
@@ -302,11 +327,27 @@ def main():
     sub.add_parser(
         "debloat-audit", help="Read optional-app, telemetry and detector dependencies"
     )
+    sub.add_parser(
+        "service-audit",
+        help="Read service inventory, activation dependencies, app registrations and process identities",
+    )
     boot = sub.add_parser(
         "startup", help="Reapply currently selected runtime controls after boot"
     )
     boot.add_argument(
         "operation", choices=("audit", "probe", "install", "status", "run", "remove")
+    )
+    packages = sub.add_parser(
+        "packages",
+        help="Back up and natively remove the six assessed optional packages",
+    )
+    packages.add_argument(
+        "operation", choices=("prepare", "backup", "remove", "status")
+    )
+    packages.add_argument(
+        "--backup-dir",
+        type=Path,
+        help="New private directory for prepare; verified existing backup for remove",
     )
     sub.add_parser("hdmi-audit", help="Read HDMI-CEC settings and connected devices")
     sub.add_parser(
@@ -417,6 +458,10 @@ def main():
         parser.error("--tv is required for TV operations")
     if not shutil.which("openssl"):
         raise ValueError("OpenSSL is required")
+    if args.action == "packages":
+        import remove_packages
+
+        return remove_packages.run(args, sys.modules[__name__])
     client = SdbClient(find_sdb(), str(args.tv))
     if args.profile != "frame":
         client.connect()
@@ -494,6 +539,8 @@ def main():
             )
         elif args.action == "voice-audit":
             script = device_scripts.VOICE_AUDIT
+        elif args.action == "service-audit":
+            script = render_service_audit()
         elif args.action == "debloat-audit":
             script = device_scripts.DEBLOAT_AUDIT.replace(
                 "@@BUILD@@", policy()["build"]
@@ -559,6 +606,8 @@ def main():
             probe(
                 str(args.tv),
                 callback_host=str(args.callback_host) if args.callback_host else None,
+                # The launcher return channel otherwise expires after 50 seconds,
+                # even while an authorized command is still within its budget.
                 accept_timeout=180,
                 command_timeout=180,
                 commands=(wrapped(script),),

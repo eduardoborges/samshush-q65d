@@ -9,6 +9,7 @@ set -euo pipefail
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 ACTION='@@ACTION@@'
 SCOPE='@@SCOPE@@'
+STOP_GRACE_SECONDS=0
 BUILD='@@BUILD@@'
 STATE=/run/frame-runtime-v1
 LOCK=/run/frame-runtime-v1.lock
@@ -53,6 +54,46 @@ snapshot() {
             for(i=1;i<=count;i++) print rows[order[i]]
         }'
 }
+# Some optional daemons ignore TERM and declare a five-minute stop timeout.
+# Only groups with an explicit grace period use bounded cgroup termination.
+pending_stops() {
+    local records unit load active pid masked
+    records=$(snapshot) || return 1
+    while IFS=$'\t' read -r unit load active pid masked; do
+        if [[ $active != inactive && $active != failed ]] || [[ $unit == *.service && $pid != 0 ]]; then
+            printf '%s\n' "$unit"
+        fi
+    done <<< "$records"
+}
+stop_selected() {
+    local pending unit i
+    local -a remaining=()
+    if (( STOP_GRACE_SECONDS == 0 )); then
+        systemctl stop "${selected[@]}"
+        return
+    fi
+    systemctl stop --no-block "${selected[@]}" || return 1
+    for ((i=0; i<STOP_GRACE_SECONDS; i++)); do
+        pending=$(pending_stops) || return 1
+        [[ -n $pending ]] || return 0
+        sleep 1
+    done
+    pending=$(pending_stops) || return 1
+    [[ -n $pending ]] || return 0
+    while IFS= read -r unit; do
+        [[ $unit == *.service ]] || { echo "Activation unit did not stop: $unit" >&2; return 1; }
+        remaining+=("$unit")
+    done <<< "$pending"
+    printf 'STOP GRACE EXPIRED; terminating selected cgroups: %s\n' "${remaining[*]}"
+    systemctl kill --kill-who=all --signal=KILL "${remaining[@]}" || return 1
+    for ((i=0; i<5; i++)); do
+        pending=$(pending_stops) || return 1
+        [[ -n $pending ]] || return 0
+        sleep 1
+    done
+    echo "Selected units remain after termination: $pending" >&2
+    return 1
+}
 check_masks() {
     local records unit load active pid masked bad=0
     records=$(snapshot) || fail 'Invalid or incomplete unit status'
@@ -67,6 +108,52 @@ check_masks() {
         fi
     done <<< "$records"
     return "$bad"
+}
+processes() { cat <<'PROCESSES'
+@@PROCESSES@@
+PROCESSES
+}
+# /proc/PID/exe has no target for kernel threads and fully exited processes.
+# A zombie leader can still have live threads, so require a single thread.
+# Field 9 is flags (PF_KTHREAD=0x00200000); field 20 is the thread count.
+no_userspace_executable() {
+    local record
+    local -a fields=()
+    record=$(cat "$1/stat" 2>/dev/null) || return 1
+    [[ $record == *") "* ]] || return 1
+    # comm can contain spaces and parentheses; fields follow its final ')'.
+    read -r -a fields <<< "${record##*) }"
+    (( ${#fields[@]} >= 18 )) || return 1
+    [[ ${fields[6]} =~ ^[0-9]+$ && ${fields[17]} =~ ^[0-9]+$ ]] || return 1
+    (( (10#${fields[6]} & 0x00200000) != 0 )) && return 0
+    [[ ( ${fields[0]} == Z || ${fields[0]} == X ) && ${fields[17]} == 1 ]]
+}
+check_processes() {
+    local expected canonical proc actual found=0
+    local -a targets=()
+    while IFS= read -r expected; do
+        [[ -n $expected ]] || continue
+        [[ $expected == /* && -f $expected ]] || { echo "PROCESS PATH UNAVAILABLE $expected" >&2; return 1; }
+        canonical=$(readlink -f "$expected") || return 1
+        targets+=("$canonical")
+    done < <(processes)
+    (( ${#targets[@]} > 0 )) || return 0
+    [[ ${1-} != paths-only ]] || return 0
+    for proc in /proc/[0-9]*; do
+        if ! actual=$(readlink "$proc/exe" 2>/dev/null); then
+            [[ ! -d $proc ]] && continue
+            no_userspace_executable "$proc" && continue
+            echo "PROCESS IDENTITY UNAVAILABLE ${proc##*/}" >&2; found=1
+            continue
+        fi
+        for expected in "${targets[@]}"; do
+            if [[ $actual == "$expected" || $actual == "$expected (deleted)" ]]; then
+                echo "SURVIVING SERVICE PROCESS ${proc##*/} $actual"; found=1
+            fi
+        done
+    done
+    [[ $found == 0 ]] || return 1
+    echo 'SELECTED SERVICE PROCESSES ABSENT'
 }
 certs() { cat <<'CERTS'
 @@CERTS@@
@@ -172,6 +259,7 @@ if [[ $ACTION == status ]]; then
         while IFS=$'\t' read -r unit was_active; do selected+=("$unit"); done < "$STATE/units.tsv"
         (( ${#selected[@]} > 0 )) || fail 'Empty unit journal'
         if ! check_masks; then bad=1; fi
+        if ! check_processes; then bad=1; fi
     fi
     exit "$bad"
 fi
@@ -223,6 +311,7 @@ if [[ $SCOPE == services || $SCOPE == both || $SCOPE == voice ]]; then
         [[ $active == active || $active == activating || $active == inactive || $active == failed ]] || fail "Unsupported unit state: $unit=$active"
         [[ ! -e /run/systemd/system/$unit && ! -L /run/systemd/system/$unit ]] || fail "Existing runtime override: $unit"
     done <<< "$records"
+    check_processes paths-only || fail 'Selected service process path unavailable'
     phase preflight_end
 fi
 mkdir -m 700 -- "$STATE"
@@ -263,9 +352,10 @@ if [[ $SCOPE == services || $SCOPE == both || $SCOPE == voice ]]; then
     phase reload_begin
     systemctl daemon-reload
     phase stop_begin
-    systemctl stop "${selected[@]}"
+    stop_selected
     phase readback_begin
     check_masks || fail 'Unit batch readback failed'
+    check_processes || fail 'Selected service process remains or cannot be checked'
     phase readback_end
 fi
 touch "$STATE/complete"
@@ -789,7 +879,7 @@ for proc in /proc/[0-9]*; do
  exe=$(readlink "$proc/exe" 2>/dev/null) || continue
  case "$exe" in *smartthings*|*SmartThings*|*iot-hub*|*contents-*|*adagent*|*targeted-ad*|*pisa*|*analytics*|*issue_report*|*devicetracker*|*abnormal_user*|*emergency-log*|*gaminghub*|*gamehome*|*samsunghealth*|*tvplus*|*slive*|*/bms-service|*wifi-presence*|*rmdemon*) printf 'PID=%s EXE=%s\n' "${proc##*/}" "$exe";;
  esac
- case "$exe" in */dotnet|*/apphost|*/CoreRuntime*)
+ case "$exe" in /usr/bin/dotnet-loader|/usr/bin/dotnet-launcher-inhouse|*/dotnet|*/apphost|*/CoreRuntime*)
   while IFS= read -r -d '' arg; do
    case "$arg" in /opt/usr/apps/*SmartThings*/*.dll|/opt/usr/apps/*smartthings*/*.dll|/opt/usr/apps/*gaminghub*/*.dll|/opt/usr/apps/*gamehome*/*.dll) printf 'MANAGED PID=%s APP=%s\n' "${proc##*/}" "$arg";; esac
   done < "$proc/cmdline";;
@@ -933,4 +1023,39 @@ cat "$stage/result"
 grep -q '^uid=0(root)' "$stage/result" || exit 1
 [[ $(systemctl show "$unit" -p Result --value) == success ]] || exit 1
 echo 'STARTUP PROBE PASSED: stock interpreter, system service, UID 0'
+"""
+
+
+SERVICE_AUDIT = r"""#!/bin/bash
+set -euo pipefail
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+[[ $(id -u) == 0 ]] || exit 1
+grep -Fxq 'BUILD_ID=@@BUILD@@' /etc/os-release || exit 1
+echo 'SERVICE AUDIT: metadata only; no launches, settings changes or media/packet capture'
+cat /proc/sys/kernel/random/boot_id
+DB=/opt/dbspace/.pkgmgr_parser.db
+[[ -f $DB ]] || exit 1
+echo 'LOADED SERVICE INVENTORY'
+systemctl list-units --all --type=service --no-pager --no-legend
+echo 'SERVICE FILE INVENTORY'
+systemctl list-unit-files --type=service --no-pager --no-legend
+echo 'PROFILE AND INVESTIGATION UNIT DEPENDENCIES'
+systemctl show @@UNITS@@ -p Id -p LoadState -p ActiveState -p SubState -p MainPID -p UnitFileState -p FragmentPath -p Requires -p Wants -p RequiredBy -p WantedBy -p BindsTo -p BoundBy -p PartOf -p ConsistsOf -p Triggers -p TriggeredBy
+echo 'APP REGISTRATIONS'
+sqlite3 -readonly "$DB" 'SELECT app_id,app_disable,app_exec FROM package_app_info ORDER BY app_id;'
+echo 'NATIVE PROCESS IDENTITIES'
+for proc in /proc/[0-9]*; do
+ exe=$(readlink "$proc/exe" 2>/dev/null) || continue
+ printf 'PID=%s EXE=%s\n' "${proc##*/}" "$exe"
+ case "$exe" in /usr/bin/dotnet-loader|/usr/bin/dotnet-launcher-inhouse|*/dotnet|*/apphost|*/CoreRuntime*)
+  while IFS= read -r -d '' arg; do
+   case "$arg" in /usr/apps/*.dll|/opt/usr/apps/*.dll) printf 'MANAGED PID=%s APP=%s\n' "${proc##*/}" "$arg";; esac
+  done < "$proc/cmdline";;
+ esac
+done
+echo 'PRESENCE AND RECOGNITION SETTINGS (missing keys are not protection)'
+for key in db/userpresence/auto_dimming db/menu/system/auto_screen_dimming db/smartthing/energy/ai_energy_mode db/menu/system/accessibility/subtitle-recog; do
+ vconftool get "$key" || printf 'UNAVAILABLE %s\n' "$key"
+done
+echo 'SERVICE AUDIT COMPLETE: inventory is not a privacy or capture-denial verdict'
 """
