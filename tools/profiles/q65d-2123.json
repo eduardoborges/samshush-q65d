@@ -102,6 +102,112 @@
       "application_ids": [],
       "systemd_units": [],
       "reason": "com.samsung.tv.coba.adagent is registered but its pkgmgr executable path is missing on disk (empty bin/). Deferred until a valid preimage exists."
+    },
+    "reporting": {
+      "application_ids": [],
+      "systemd_units": [
+        "org.tizen.tv.media.analytics.service.busname",
+        "media-analytics-service.service",
+        "devicetracker.service",
+        "abnormal_user_behavior.service",
+        "issue_report_agent.service",
+        "emergency-log-transmitter.service"
+      ],
+      "validation": "Unit, app and helper hashes pinned from the 2026-10-30 live audit. Not applied."
+    },
+    "presence-sensing": {
+      "application_ids": [],
+      "systemd_units": [
+        "com.samsung.tv.wifi-motion-mgr.service",
+        "com.samsung.tv.wifi-motion-mgr-setcap.service",
+        "user-presence.service",
+        "ua-manager.service",
+        "ambient-ua-agent.service"
+      ],
+      "process_paths": [
+        "/usr/bin/wifi-motion-mgr",
+        "/usr/sbin/user-presence",
+        "/usr/bin/ua-manager",
+        "/usr/bin/ambient-ua-agent"
+      ],
+      "purpose": "Stop separate Wi-Fi motion and user-awareness services.",
+      "tradeoffs": "Presence-based automatic dimming, power saving and Art wake can be lost. Manual Art Mode and networking are retained.",
+      "validation": "Unit, app and helper hashes pinned from the 2026-10-30 live audit. Not applied."
+    },
+    "analytics-context": {
+      "application_ids": [],
+      "systemd_units": [
+        "com.samsung.tv.context-aware-service.path",
+        "com.samsung.tv.context-aware-service.service",
+        "data-service.service"
+      ],
+      "process_paths": [
+        "/usr/bin/data-service"
+      ],
+      "purpose": "Stop the context-aware collector and data logger, independently of existing diagnostic reporting controls.",
+      "tradeoffs": "Context-based personalization is unavailable. Shared account consent and PISA remain enabled.",
+      "stop_grace_seconds": 20,
+      "validation": "Unit, app and helper hashes pinned from the 2026-10-30 live audit. Not applied."
+    },
+    "remote-support": {
+      "application_ids": [],
+      "systemd_units": [
+        "remote-management.service",
+        "samsung-easy-support.service",
+        "remote-shop-care-hub.service"
+      ],
+      "process_paths": [
+        "/usr/bin/rmdemon",
+        "/usr/bin/ses-service",
+        "/usr/bin/rscmdemon"
+      ],
+      "purpose": "Stop optional remote-support and retail-management daemons, including their systemd-backed D-Bus activation.",
+      "tradeoffs": "Vendor remote support and remote shop management unavailable. Keep Maintenance Mode backup/restore, owner SDB and core remote navigation.",
+      "validation": "Unit, app and helper hashes pinned from the 2026-10-30 live audit. Not applied."
+    },
+    "remote-pc": {
+      "application_ids": [
+        "org.tizen.remotepc"
+      ],
+      "systemd_units": [
+        "org.tizen.remotepc.service"
+      ],
+      "process_paths": [
+        "/opt/usr/apps/org.tizen.remotepc/bin/remotepc_manager"
+      ],
+      "purpose": "Block the Remote PC launcher and its separate service while retaining zone isolation and the shared browser.",
+      "tradeoffs": "Remote PC unavailable. This control is not a finding that this firmware is vulnerable.",
+      "validation": "Unit, app and helper hashes pinned from the 2026-10-30 live audit. Not applied."
+    },
+    "gaming-backend": {
+      "application_ids": [
+        "com.samsung.tv.ghdaemon",
+        "com.samsung.tv.ghservice"
+      ],
+      "systemd_units": [
+        "com.samsung.tv.ghdaemon.path",
+        "com.samsung.tv.ghdaemon.service"
+      ],
+      "purpose": "Block Gaming Hub backend app registrations and startup paths separately from existing frontend blocks.",
+      "tradeoffs": "Gaming Hub services unavailable. Preserve Game Mode, Game Bar, HDMI ALLM/VRR and gamepad drivers.",
+      "validation": "Unit, app and helper hashes pinned from the 2026-10-30 live audit. Not applied."
+    },
+    "optional-delivery": {
+      "application_ids": [
+        "org.tizen.was-appsync",
+        "org.tizen.was-appupdate",
+        "org.tizen.was-builtinupgrade"
+      ],
+      "systemd_units": [
+        "was-background-update.path",
+        "was-background-update.service"
+      ],
+      "process_paths": [
+        "/usr/bin/was_background_update"
+      ],
+      "purpose": "Disable optional app synchronization/update helpers and background delivery before package removal.",
+      "tradeoffs": "Automatic app updates and app synchronization are unavailable. Shared package management, appbinary-manager and the manual firmware updater remain enabled.",
+      "validation": "Unit, app and helper hashes pinned from the 2026-10-30 live audit. Not applied."
     }
   },
   "applications": {
@@ -208,6 +314,30 @@
     "com.samsung.tv.targeted-ad-service": {
       "executable": "/opt/usr/apps/com.samsung.tv.targeted-ad-service/bin/targeted-ad-service",
       "manifest": "/opt/share/packages/com.samsung.tv.targeted-ad-service.xml"
+    },
+    "org.tizen.remotepc": {
+      "executable": "/opt/usr/apps/org.tizen.remotepc/bin/remotepc_uilauncher",
+      "manifest": "/opt/share/packages/org.tizen.remotepc.xml"
+    },
+    "com.samsung.tv.ghdaemon": {
+      "executable": "/opt/usr/apps/com.samsung.tv.ghdaemon/bin/ghdaemon",
+      "manifest": "/opt/share/packages/com.samsung.tv.ghdaemon.xml"
+    },
+    "com.samsung.tv.ghservice": {
+      "executable": "/opt/usr/apps/com.samsung.tv.ghservice/bin/com.samsung.tv.ghservice.dll",
+      "manifest": "/opt/share/packages/com.samsung.tv.ghservice.xml"
+    },
+    "org.tizen.was-appsync": {
+      "executable": "/usr/apps/org.tizen.was-appsync/bin/was-appsync",
+      "manifest": "/usr/share/packages/org.tizen.was-appsync.xml"
+    },
+    "org.tizen.was-appupdate": {
+      "executable": "/usr/apps/org.tizen.was-appupdate/bin/was-appupdate",
+      "manifest": "/usr/share/packages/org.tizen.was-appupdate.xml"
+    },
+    "org.tizen.was-builtinupgrade": {
+      "executable": "/usr/apps/org.tizen.was-builtinupgrade/bin/was-builtinupgrade",
+      "manifest": "/usr/share/packages/org.tizen.was-builtinupgrade.xml"
     }
   },
   "startup_guards": [],
@@ -291,10 +421,67 @@
     "/opt/share/packages/com.samsung.tv.pisa-service.xml": "3a8c6305a25941d41fb0dc994b480c6091cdde9b748e43b7c151b30b500a65f9",
     "/opt/usr/apps/com.samsung.tv.targeted-ad-service/bin/targeted-ad-service": "463ab05c4da03867c935ce3b7b743e79ba89a4e5cadc7b07b8ba0979d998f0b7",
     "/opt/share/packages/com.samsung.tv.targeted-ad-service.xml": "3fad6a3424392cad2d6c51c353ded2c3ed7668e8e570edaf7eeb6f9ac63c9221",
-    "/usr/lib/systemd/system/adagent-service.service": "6c159c9e9572fa4e5a7b897ebfe55e1113f0fe4dffbd6eb8b6a4a6482f4fc813"
+    "/usr/lib/systemd/system/adagent-service.service": "6c159c9e9572fa4e5a7b897ebfe55e1113f0fe4dffbd6eb8b6a4a6482f4fc813",
+    "/usr/lib/systemd/system/org.tizen.tv.media.analytics.service.busname": "2aa06168a9f625d074a04a4f6cfc06b8cefa3c47fcd3cb09f01eb33ec24240c2",
+    "/usr/lib/systemd/system/media-analytics-service.service": "c8e8ad238569241a5da7ece0493c17b357d9545332cf5c5b0e16fedcde12f6e5",
+    "/usr/lib/systemd/system/devicetracker.service": "e58f8ff46c1c8baaa04ba7082157b06bd203585df97234967914f1cf6b769f25",
+    "/usr/lib/systemd/system/abnormal_user_behavior.service": "5fe42f5be12e6ddb1a25d0797b05bb8f6db2f1e3c910e52b91203708d88bfa63",
+    "/usr/lib/systemd/system/issue_report_agent.service": "f6d384e08e66eccca6ba1d48b7aa140370368adbc87b63ac589b1fe2a113424e",
+    "/usr/lib/systemd/system/emergency-log-transmitter.service": "9ea493a0bcfd5e31d51a591949ed775a84a903c703d2d35003b933fd3c77946c",
+    "/usr/lib/systemd/system/com.samsung.tv.wifi-motion-mgr.service": "1962ba970018a5c7d40b4e5cee098c46b3860f7325ab7b912ead0b26f5f3e00d",
+    "/usr/lib/systemd/system/com.samsung.tv.wifi-motion-mgr-setcap.service": "0a3197281222dde4f54206e7a6fbd7cf82eade75c9fe9b3aac293844aeaf04e0",
+    "/usr/lib/systemd/system/user-presence.service": "b7f99c483d6f76f36e51471f9916a4319ede598459700b5e4217922d0e8203c7",
+    "/usr/lib/systemd/system/ua-manager.service": "29a018baf81f4f24b167e887de7412d8563e9bf8c049d97e433689c150ef2220",
+    "/usr/lib/systemd/system/ambient-ua-agent.service": "c07681a8d1915da3d7bb7989c5eacb03d05e80a798c12ce8826ff11460ed7d6e",
+    "/usr/lib/systemd/system/com.samsung.tv.context-aware-service.path": "9e3b2d659e8f409b31a7c32cc3c1f02e38061b45bf40ecef1ceb883fa77531d2",
+    "/usr/lib/systemd/system/com.samsung.tv.context-aware-service.service": "cba2984695fc2af9a79531251caf86cea453436daff1d245b6415915561faf99",
+    "/usr/lib/systemd/system/data-service.service": "662bab1ceb8ffd54f8de752203bb05848e277049abecd06fbc8764f7fb21f3c6",
+    "/usr/lib/systemd/system/remote-management.service": "20a53a5c7f2a53185e228f622e980d90fb4ea71220909fa0c3296e38172cfabd",
+    "/usr/lib/systemd/system/samsung-easy-support.service": "a0c50f376d8db29936911b134e305f8fefd6a5c1265cac010546abd47bbd2242",
+    "/usr/lib/systemd/system/remote-shop-care-hub.service": "e9a53a363a9d5a7e725ac25d8ef07b01cd409a3a507dad39d7859203a6e03302",
+    "/usr/lib/systemd/system/org.tizen.remotepc.service": "c2edfdb32f074ac4bc53b89cf1556405d6f91923e2447c2609e7eb4db02e909a",
+    "/opt/usr/apps/org.tizen.remotepc/bin/remotepc_uilauncher": "de39ff72c7cd21d010f0b8b71b2429864539220541960a0932cdbecdc90dab26",
+    "/opt/share/packages/org.tizen.remotepc.xml": "433e7e0e23209e0570a9d16e77e433db2437b6cf26c497c77c632a082db95404",
+    "/usr/lib/systemd/system/com.samsung.tv.ghdaemon.path": "ab91d8355de026250feac0e824da1982bc62979cebba5bb7702d94a57e0ff83a",
+    "/usr/lib/systemd/system/com.samsung.tv.ghdaemon.service": "63144d538adc96506693101bb0c0ffcae3e18a48cb2b28efa6c20c7d4a41bf31",
+    "/opt/usr/apps/com.samsung.tv.ghdaemon/bin/ghdaemon": "bafb14ddebf4988d880ee365eff2e94b5e0b6a11ef9dfa62da21d74e9f7648cf",
+    "/opt/share/packages/com.samsung.tv.ghdaemon.xml": "f0ce64bec4c83731ebb7f9fd1baba8c1d99e0a98e9bbbef97a5a5649ed247f94",
+    "/opt/usr/apps/com.samsung.tv.ghservice/bin/com.samsung.tv.ghservice.dll": "3ce6c9b3eafd039728b2471e8349fedd5d3de5598ebec10d8425f716aef034e4",
+    "/opt/share/packages/com.samsung.tv.ghservice.xml": "868cd82820847b5188844ae7ec5ce816b97d8ad89ef7f888b5a95a4d05520ce4",
+    "/usr/lib/systemd/system/was-background-update.path": "66bc3b6e2d309837ae8cd39a56d062ad83fa9a686c379fc3784e1d82f8bb0c6b",
+    "/usr/lib/systemd/system/was-background-update.service": "7ec64c6d1d2e1511c96571faf38dafbf77a2868c09ac8622f29fade6135d8c7c",
+    "/usr/apps/org.tizen.was-appsync/bin/was-appsync": "95c779e241cc473b1ba2845a183eb6f7670e4c8b2160778e942493d27df155d4",
+    "/usr/share/packages/org.tizen.was-appsync.xml": "6b883b865381640a7e70618d86eb980e23c44acc66bad74004779d6165002d37",
+    "/usr/apps/org.tizen.was-appupdate/bin/was-appupdate": "a9a99589bb1cb8f6c5961b57f40291d2474da7a796e9a68f1ee7503d0aca8621",
+    "/usr/share/packages/org.tizen.was-appupdate.xml": "59b3bde132f2dab38b899972ae6b2885a20294f44e26292b343b5fac01291af4",
+    "/usr/apps/org.tizen.was-builtinupgrade/bin/was-builtinupgrade": "b9d18869fa45f74fbdb837a60f5a634a57afb2ce900d69f27ecc4d46ff380dbd",
+    "/usr/share/packages/org.tizen.was-builtinupgrade.xml": "d112a43eb47e9b363a97dc73551c99407b29b4a6f34f361d339ee6a2c25dcd3c"
   },
   "runtime_validated": true,
-  "persistence": "Native app flags and ambient-sound disable verified by launch denial on 2026-10-29. Voice and wifi-presence masks applied for current boot only; reboot persistence not yet tested. No startup guards on this build. Startup hook not installed.",
+  "persistence": "Native app flags and ambient-sound survived the 2026-10-30 reboot. Voice, wifi-presence and advertising masks last for one boot. The startup hook is installed and run tested, but a fresh reboot has not verified it. No startup guards on this build.",
   "verification_scope": "Live apply 2026-10-29: 23 voice apps launch-denied, ambient-sound launch-denied, 19 voice units masked, wifi-presence masked. Cold boot / power-cycle not verified.",
-  "last_verified_utc": "2026-10-29T12:09:54Z"
+  "last_verified_utc": "2026-10-29T12:09:54Z",
+  "service_audit_units": [
+    "com.samsung.tv.AICompanionAgent.service",
+    "com.samsung.tv.ai-interpreter-service.service",
+    "com.samsung.tv.wifi-motion-mgr.service",
+    "com.samsung.tv.wifi-motion-mgr-setcap.service",
+    "user-presence.service",
+    "ua-manager.service",
+    "ambient-ua-agent.service",
+    "data-service.service",
+    "com.samsung.tv.context-aware-service.service",
+    "com.samsung.tv.context-aware-service.path",
+    "awm-service.service",
+    "was-background-update.service",
+    "appbinary-manager.service",
+    "debug-shell.service",
+    "socite-remote.service",
+    "ssc-service.service",
+    "ssdm-service.service",
+    "hdmicec-service.service",
+    "mini-hdmicec-service.service",
+    "remoteapp.service",
+    "sdbd.service"
+  ]
 }

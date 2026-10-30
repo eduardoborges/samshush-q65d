@@ -81,9 +81,14 @@ boot to sync art from Samsung's server. Ambient Mode is the separate
 All Q65D device and recovery commands require `--profile q65d-2123` before the
 command. That profile inventories 23 voice apps and 19 voice units (includes
 `virtual-mic`, omits absent `wakeupless`/`farfieldvoice` units), plus
-`ambient-sound` and an assessed `wifi-presence` group. This build has no vendor
-startup-guard drop-ins under `/opt/usr/share/systemd/system`. Other optional
-groups, certificates, Auto Update and blanket service scopes are rejected.
+`ambient-sound` and the assessed `wifi-presence` and `advertising` groups. The
+`reporting`, `presence-sensing`, `analytics-context`, `remote-support`, `remote-pc`,
+`gaming-backend` and `optional-delivery` groups are pinned from a live audit and
+have not been applied. `visual-analysis` and `screen-recognition` need a reduced
+definition on this build, and `ai-models` and `voice-launchers` are absent. This
+build has no vendor startup-guard drop-ins under `/opt/usr/share/systemd/system`.
+Other optional groups, certificates, Auto Update and blanket service scopes are
+rejected.
 Application requires the successful matching trial journal plus pinned
 preimages. The S95C's AOV dashboard uses `dotnet-loader` and its inhouse apps use
 `dotnet-launcher-inhouse`; both runtimes are pinned on the ARMv7 profiles.

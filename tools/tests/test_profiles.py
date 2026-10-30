@@ -217,6 +217,24 @@ sha256sum() {
                 with self.subTest(scope=scope), self.assertRaises(ValueError):
                     frame.render("apply", scope)
 
+    def test_q65d_groups_pin_their_preimages(self):
+        with patch.object(frame, "ACTIVE_PROFILE", "q65d-2123"):
+            for group, entry in frame.policy()["optional_controls"].items():
+                with self.subTest(group=group):
+                    if entry["application_ids"]:
+                        frame.render_apps("apply", group=group)
+                    if entry["systemd_units"]:
+                        frame.render("apply", "services", unit_group=group)
+            self.assertIn(
+                "f0ce64bec4c83731ebb7f9fd1baba8c1d99e0a98e9bbbef97a5a5649ed247f94",
+                frame.render_apps("apply", group="gaming-backend"),
+            )
+            script = frame.render("apply", "services", unit_group="analytics-context")
+            decoded = frame.base64.b64decode(script.split()[2]).decode()
+            self.assertIn("STOP_GRACE_SECONDS=20", decoded)
+            self.assertIn("/usr/bin/data-service", decoded)
+            subprocess.run(["/bin/bash", "-n"], input=decoded, text=True, check=True)
+
     def test_other_profiles_omit_package_removal(self):
         import io
         import tarfile
