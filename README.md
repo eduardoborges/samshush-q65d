@@ -121,6 +121,8 @@ helper checks, apply rolls back if a helper survives the manager shutdown.
 
 ## Optional package removal
 
+Package removal is only available on the Frame profile.
+
 `packages prepare --backup-dir PATH` disables and stops six assessed packages,
 then copies their installed files, app data, registration evidence and SMACK labels
 to a private backup on your computer. If transfer fails, `packages backup` retries

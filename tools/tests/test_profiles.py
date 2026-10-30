@@ -217,6 +217,26 @@ sha256sum() {
                 with self.subTest(scope=scope), self.assertRaises(ValueError):
                     frame.render("apply", scope)
 
+    def test_other_profiles_omit_package_removal(self):
+        import io
+        import tarfile
+
+        for profile in ("s95c-2220", "q65d-2123"):
+            with (
+                self.subTest(profile=profile),
+                patch.object(frame, "ACTIVE_PROFILE", profile),
+            ):
+                package = startup.bundle(frame.policy(), frame.render, frame.ASSETS)
+                with tarfile.open(fileobj=io.BytesIO(package)) as archive:
+                    self.assertNotIn("packages.status", archive.getnames())
+                argv = ["frame.py", "--profile", profile, "--tv", "192.0.2.10"]
+                with (
+                    patch.object(frame.sys, "argv", argv + ["packages", "status"]),
+                    patch("sys.stderr"),
+                    self.assertRaises(SystemExit),
+                ):
+                    frame.main()
+
     def test_s95c_boot_package_contains_only_assessed_scopes(self):
         import io
         import tarfile

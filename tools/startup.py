@@ -296,7 +296,8 @@ def bundle(policy, render, assets):
         else:
             expected = policy["optional_controls"][name]["systemd_units"]
         files[f"{name}.expected"] = ("\n".join(expected) + "\n").encode()
-    files["packages.status"] = remove_packages.render("status", policy).encode()
+    if all(group in policy["optional_controls"] for group in remove_packages.GROUPS):
+        files["packages.status"] = remove_packages.render("status", policy).encode()
     files["candidates"] = "".join(
         f"{name}\t{journal}\t{scope}\n" for name, journal, scope, _ in candidates
     ).encode()

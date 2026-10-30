@@ -459,6 +459,8 @@ def main():
     if not shutil.which("openssl"):
         raise ValueError("OpenSSL is required")
     if args.action == "packages":
+        if args.profile != "frame":
+            parser.error("Package removal is only available on the Frame profile")
         import remove_packages
 
         return remove_packages.run(args, sys.modules[__name__])

@@ -230,7 +230,8 @@ to the companion processor based on duplicated filenames.
 
 ## Package removal
 
-Package/model removal is a separate, explicitly authorized action. The `packages`
+Package/model removal is a separate, explicitly authorized action and is only
+available on the Frame profile. The `packages`
 command targets exactly six removable TPKs: `com.samsung.tv.ai-interpreter-service`,
 `com.samsung.tv.contents-recognition-dbmgr`, `com.samsung.tv.screen-analysis-dbmgr`,
 `com.samsung.tv.screen-analysis-dbmgr-nb`, `com.samsung.tizen.samsung-analytics`, and
