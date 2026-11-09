@@ -87,6 +87,18 @@ and `gaming-backend` groups passed live apply and mask readback. `optional-deliv
 is pinned but not applied, because it turns off automatic app updates and app
 synchronization. Applying the `gaming-backend` apps also stopped `gamepad-service`,
 which stays D-Bus activated through its busname; controller use is untested.
+On this profile `analytics-context` also masks `org.tizen.tv.logger.busname` and
+`org.tizen.tv.dataservice.busname`. systemd generates both from D-Bus activation
+files, and the profile pins those source files. `hdmicec-service` calls
+`logger_AddEventLog_Sync` on `org.tizen.tv.logger` for each CEC volume step. With
+only `data-service` masked, the bus names stayed active, pings blocked until their
+timeout and soundbar volume from the TV remote took about 3 seconds per step. With
+the bus names masked too, pings fail with `ServiceUnknown` in about 30 ms and the
+owner reported fast volume. The Frame profile masks `data-service` without its bus
+names; this effect is untested there. `net.auad` and `org.tizen.remotepc` still block
+until timeout on the Q65D. Four more names did on 2026-10-31 and failed immediately
+on 2026-11-01, for an unknown reason. A 102-second trace around a volume burst
+showed no calls to any of these six.
 `visual-analysis` and `screen-recognition` need a reduced
 definition on this build, and `ai-models` and `voice-launchers` are absent. This
 build has no vendor startup-guard drop-ins under `/opt/usr/share/systemd/system`.

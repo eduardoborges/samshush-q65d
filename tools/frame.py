@@ -105,6 +105,12 @@ def render(action, scope, *, certificate_journal=False, unit_group=None):
         if unit_group is not None
         else []
     )
+    # systemd generates these units at runtime, so their source files get pinned.
+    generated = (
+        p["optional_controls"][unit_group].get("generated_units", {})
+        if unit_group is not None
+        else {}
+    )
     script = device_scripts.RUNTIME
     if "device_identity" in p and action == "apply":
         if scope != "voice" and not (scope == "services" and unit_group is not None):
@@ -112,7 +118,13 @@ def render(action, scope, *, certificate_journal=False, unit_group=None):
         script = (
             device_identity(p)
             + require_trial(p)
-            + preimages(p, ["/usr/lib/systemd/system/" + u for u in selected_units])
+            + preimages(
+                p,
+                [
+                    generated.get(u, "/usr/lib/systemd/system/" + u)
+                    for u in selected_units
+                ],
+            )
             + script
         )
     if unit_group is not None:

@@ -233,6 +233,13 @@ sha256sum() {
             decoded = frame.base64.b64decode(script.split()[2]).decode()
             self.assertIn("STOP_GRACE_SECONDS=20", decoded)
             self.assertIn("/usr/bin/data-service", decoded)
+            self.assertIn(
+                "/usr/share/dbus-1/system-services/org.tizen.tv.logger.service",
+                decoded,
+            )
+            self.assertNotIn(
+                "/usr/lib/systemd/system/org.tizen.tv.logger.busname", decoded
+            )
             subprocess.run(["/bin/bash", "-n"], input=decoded, text=True, check=True)
 
     def test_other_profiles_omit_package_removal(self):

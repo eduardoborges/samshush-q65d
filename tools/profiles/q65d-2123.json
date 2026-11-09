@@ -139,15 +139,21 @@
       "systemd_units": [
         "com.samsung.tv.context-aware-service.path",
         "com.samsung.tv.context-aware-service.service",
-        "data-service.service"
+        "data-service.service",
+        "org.tizen.tv.logger.busname",
+        "org.tizen.tv.dataservice.busname"
       ],
+      "generated_units": {
+        "org.tizen.tv.logger.busname": "/usr/share/dbus-1/system-services/org.tizen.tv.logger.service",
+        "org.tizen.tv.dataservice.busname": "/usr/share/dbus-1/system-services/org.tizen.tv.dataservice.service"
+      },
       "process_paths": [
         "/usr/bin/data-service"
       ],
       "purpose": "Stop the context-aware collector and data logger, independently of existing diagnostic reporting controls.",
-      "tradeoffs": "Context-based personalization is unavailable. Shared account consent and PISA remain enabled.",
+      "tradeoffs": "Context-based personalization is unavailable. Shared account consent and PISA remain enabled. The logger's two bus names are masked with data-service: hdmicec-service logs every CEC volume step to org.tizen.tv.logger, and masking the service alone slowed soundbar volume to about 3 seconds per step.",
       "stop_grace_seconds": 20,
-      "validation": "Live apply and mask readback passed on 2026-10-30. Retained features and a fresh reboot are not verified."
+      "validation": "Live apply and mask readback passed on 2026-11-01 with data-service and both bus names masked. The owner reported fast soundbar volume afterward. A fresh reboot is not verified."
     },
     "remote-support": {
       "application_ids": [],
@@ -437,6 +443,8 @@
     "/usr/lib/systemd/system/com.samsung.tv.context-aware-service.path": "9e3b2d659e8f409b31a7c32cc3c1f02e38061b45bf40ecef1ceb883fa77531d2",
     "/usr/lib/systemd/system/com.samsung.tv.context-aware-service.service": "cba2984695fc2af9a79531251caf86cea453436daff1d245b6415915561faf99",
     "/usr/lib/systemd/system/data-service.service": "662bab1ceb8ffd54f8de752203bb05848e277049abecd06fbc8764f7fb21f3c6",
+    "/usr/share/dbus-1/system-services/org.tizen.tv.logger.service": "0248a527065f3bfc51b5ab9ed7c2c3bef45f046bb75f9a7e90c9c3b36684f1ef",
+    "/usr/share/dbus-1/system-services/org.tizen.tv.dataservice.service": "a270a242dc06c098561bfa88202670c682202ebc38bfcad2cea65b96d404d9fa",
     "/usr/lib/systemd/system/remote-management.service": "20a53a5c7f2a53185e228f622e980d90fb4ea71220909fa0c3296e38172cfabd",
     "/usr/lib/systemd/system/samsung-easy-support.service": "a0c50f376d8db29936911b134e305f8fefd6a5c1265cac010546abd47bbd2242",
     "/usr/lib/systemd/system/remote-shop-care-hub.service": "e9a53a363a9d5a7e725ac25d8ef07b01cd409a3a507dad39d7859203a6e03302",
@@ -461,7 +469,7 @@
   "runtime_validated": true,
   "persistence": "Native app flags and ambient-sound survived the 2026-10-30 reboot. Runtime masks last for one boot. The startup hook reapplies voice, wifi-presence, advertising, reporting, presence-sensing, analytics-context, remote-support, remote-pc and gaming-backend. It is installed and run tested, but a fresh reboot has not verified it. No startup guards on this build.",
   "verification_scope": "Live apply 2026-10-29: 23 voice apps launch-denied, ambient-sound launch-denied, 19 voice units masked, wifi-presence masked. Cold boot / power-cycle not verified.",
-  "last_verified_utc": "2026-10-30T18:04:00Z",
+  "last_verified_utc": "2026-11-01T23:14:20Z",
   "service_audit_units": [
     "com.samsung.tv.AICompanionAgent.service",
     "com.samsung.tv.ai-interpreter-service.service",
