@@ -806,6 +806,7 @@ echo 'NETWORK LINK METADATA'
 for device in /sys/class/net/*; do
  printf '%s: ' "${device##*/}"
  cat "$device/operstate"
+ printf '%s speed: %s duplex: %s\n' "${device##*/}" "$(cat "$device/speed" 2>/dev/null || echo unknown)" "$(cat "$device/duplex" 2>/dev/null || echo unknown)"
 done
 echo 'PRESENCE UNIT DEPENDENCIES AND PREIMAGES'
 for unit in wifi-presence.path wifi-presence.service; do
