@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api.open-meteo.com; object-src 'none'; base-uri 'none'">
+    <title>Home — preview</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="styles.css">
+    <script src="device.js" defer></script>
+    <script src="ui.js" defer></script>
+    <script src="weather.js" defer></script>
+  </head>
+  <body>
+    <main class="home" aria-label="Home">
+      <div class="atmosphere" aria-hidden="true"></div>
+      <div class="weather" id="weather" aria-label="Weather" hidden>
+        <div class="weather-now">
+          <span id="weather-current"></span>
+          <svg class="weather-icon" id="weather-icon" viewBox="0 0 32 32"></svg>
+        </div>
+        <div class="weather-details">
+          <span class="weather-forecast" id="weather-forecast"></span>
+          <a class="weather-credit" href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer" tabindex="-1" aria-label="Weather data by Open-Meteo">Open-Meteo</a>
+        </div>
+      </div>
+      <time class="clock" id="clock" aria-label="Current time"></time>
+
+      <section class="launcher" aria-labelledby="selection-title">
+        <h1 id="selection-title">YouTube</h1>
+        <nav class="tiles" aria-label="Apps and controls">
+          <button class="tile selected" data-id="youtube" tabindex="0" aria-label="YouTube">
+            <svg class="tile-art" viewBox="0 0 220 150" aria-hidden="true">
+              <ellipse class="device-shadow" cx="110" cy="122" rx="58" ry="7"></ellipse>
+              <rect x="55" y="37" width="110" height="76" rx="22" fill="#e62117"></rect>
+              <path d="M98 58L130 75L98 92Z" fill="#ffffff"></path>
+            </svg>
+            <span class="tile-label">YouTube</span>
+          </button>
+
+          <button class="tile" data-id="stremio" tabindex="-1" aria-label="Stremio">
+            <svg class="tile-art" viewBox="0 0 220 150" aria-hidden="true">
+              <ellipse class="device-shadow" cx="110" cy="126" rx="52" ry="7"></ellipse>
+              <rect x="74" y="39" width="72" height="72" rx="14" transform="rotate(45 110 75)" fill="#7b5bf5"></rect>
+              <path d="M101 61L125 75L101 89Z" fill="#ffffff"></path>
+            </svg>
+            <span class="tile-label">Stremio</span>
+          </button>
+
+          <button class="tile" data-id="settings" tabindex="-1" aria-label="Settings">
+            <svg class="tile-art settings-art" viewBox="0 0 220 150" aria-hidden="true">
+              <circle class="gear-disc" cx="110" cy="75" r="48"></circle>
+              <g class="gear" transform="translate(110 75)">
+                <path d="M-9-39H9L12-29L19-25L30-28L39-12L31-5V5L39 12L30 28L19 25L12 29L9 39H-9L-12 29L-19 25L-30 28L-39 12L-31 5V-5L-39-12L-30-28L-19-25L-12-29Z"></path>
+                <circle r="19"></circle>
+              </g>
+            </svg>
+            <span class="tile-label">Settings</span>
+          </button>
+        </nav>
+      </section>
+      <p class="action-error" id="action-error" role="alert" hidden></p>
+    </main>
+  </body>
+</html>

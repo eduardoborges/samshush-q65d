@@ -250,6 +250,10 @@ A non-Frame profile needs a `launchpad` block with its layout, helper directory 
 
 The routing helper checks `/etc/os-release` and writes its build into the recovery receipt, so each build has its own binary under `tools/assets/payloads/PROFILE`. It is compiled from the same source with only the build constant changed; `build_payloads.py` rebuilds and compares it. Never point a profile at another build's helper or edit the constant by hand.
 
+The `q65d-2123` layout has YouTube (`9Ur5IzDKqV.TizenYouTube`), Stremio (`IkWsFHtOY9.Stremio`) and Settings. The TV also has `com.samsung.tv.cobalt-yt`, and nobody has checked which YouTube the stock Home opens. The only CEC device is the soundbar on HDMI 2, so the layout has no input tiles. Its Home keys and `tvctx-manager` process match the Frame's. Installation, launch, Home assignment and restore on the Q65D are untested.
+
+SDB accepts only the Developer Mode host address. A Mac with Wi-Fi and Ethernet on the same LAN can route the TV through the other interface and fail `sdb connect` while port 26101 is open. Route the TV through the registered interface or update the host address on the TV.
+
 Home setup is separate from privacy controls and automatic boot reapplication.
 `home install --startup-only` applies exactly three native preferences:
 

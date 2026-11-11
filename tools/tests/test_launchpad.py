@@ -426,6 +426,16 @@ class LaunchpadTests(unittest.TestCase):
                     weather_postcode=None,
                     layout=None,
                 )
+            with (
+                patch.object(
+                    sys, "argv", common + ["--sdk", "tool", "--layout", "q65d-2123"]
+                ),
+                contextlib.redirect_stdout(io.StringIO()),
+            ):
+                launchpad.main()
+            self.assertEqual(
+                build.call_args.kwargs["layout"], launchpad.LAYOUTS / "q65d-2123"
+            )
             for layout in ("missing", "../launcher", "Q65D"):
                 with (
                     self.subTest(layout=layout),
@@ -1209,6 +1219,23 @@ class LaunchTargetTests(unittest.TestCase):
                 "verification": "fixture",
             },
         }
+
+    def test_checked_in_q65d_profile_resolves_to_its_helper_and_layout(self):
+        policy = json.loads(frame.PROFILES["q65d-2123"].read_text())
+        target = launchpad.launch_target(policy, frame.ASSETS)
+        self.assertEqual(
+            (target.model, target.build), (policy["model"], policy["build"])
+        )
+        self.assertEqual(target.helper, frame.ASSETS / "payloads/q65d-2123")
+        self.assertEqual(target.layout, launchpad.LAYOUTS / "q65d-2123")
+        self.assertEqual(set(target.routing_hashes), set(launchpad_routing.HASHES))
+        files = launchpad.source_files(layout=target.layout)
+        for name in ("index.html", "ui.js", "device.js"):
+            self.assertEqual(files[name], (target.layout / name).read_bytes())
+        for name in ("config.xml", "styles.css", "weather.js", "water-lilies.jpg"):
+            self.assertEqual(files[name], (launchpad.SOURCE / name).read_bytes())
+        self.assertNotIn(b"art-mode", files["index.html"])
+        frame.verify_files()
 
     def test_frame_policy_keeps_the_upstream_target(self):
         target = launchpad.launch_target(

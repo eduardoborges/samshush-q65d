@@ -93,6 +93,44 @@ class HostTests(unittest.TestCase):
                 self.assertEqual(frame.main(), 0)
             self.assertEqual(run.call_args.args[0].operation, operation)
 
+    def test_launchpad_runs_only_on_profiles_that_pin_it(self):
+        base = ["frame.py", "--tv", "192.0.2.1"]
+        with (
+            patch.object(
+                frame.sys,
+                "argv",
+                base[:1]
+                + ["--profile", "q65d-2123"]
+                + base[1:]
+                + ["launchpad", "status"],
+            ),
+            patch.object(frame, "verify_files"),
+            patch("launchpad.run", return_value=0) as run,
+        ):
+            self.assertEqual(frame.main(), 0)
+        run.assert_called_once()
+        for profile, action in (
+            ("s95c-2220", ["launchpad", "status"]),
+            ("q65d-2123", ["home", "inspect"]),
+            ("q65d-2123", ["quiet-hours", "status"]),
+        ):
+            with (
+                self.subTest(profile=profile, action=action),
+                patch.object(
+                    frame.sys,
+                    "argv",
+                    base[:1] + ["--profile", profile] + base[1:] + action,
+                ),
+                patch.object(frame, "verify_files") as verify,
+                patch("launchpad.run") as run,
+                patch("sys.stderr", new_callable=io.StringIO),
+                self.assertRaises(SystemExit) as raised,
+            ):
+                frame.main()
+            self.assertEqual(raised.exception.code, 2)
+            verify.assert_not_called()
+            run.assert_not_called()
+
     def test_returned_package_preparation_dispatches_with_private_backup(self):
         with (
             patch.object(
