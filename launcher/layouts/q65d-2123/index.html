@@ -21,32 +21,29 @@
         <div class="now">
           <p class="date" id="date"></p>
           <time class="clock" id="clock" aria-label="Hora atual"></time>
+          <section class="info" id="market" aria-label="Cotações" hidden>
+            <p class="widget-label">Mercado</p>
+            <ol class="info-list market-list" id="market-list"></ol>
+          </section>
         </div>
         <div class="side">
-          <div class="widgets">
-            <section class="sea glass" id="sea" aria-label="Mar em Fortaleza" hidden>
-              <div class="sea-now">
-                <p class="widget-label">Ondas · Fortaleza</p>
-                <p class="widget-value" id="sea-waves"></p>
-                <p class="widget-detail" id="sea-detail"></p>
-              </div>
-              <div class="sea-tide">
-                <p class="widget-label">Maré</p>
-                <svg class="tide-chart" id="sea-chart" viewBox="0 0 300 72" aria-hidden="true"></svg>
-                <p class="widget-detail" id="sea-tide"></p>
-              </div>
-              <div class="sea-air" id="sea-air" hidden>
-                <p class="widget-label">Vento</p>
-                <p class="widget-value" id="sea-wind"></p>
-                <p class="widget-detail" id="sea-weather"></p>
-              </div>
-            </section>
-            <section class="quote glass" id="quote" aria-label="Cotação do dólar" hidden>
-              <p class="widget-label">Dólar</p>
-              <p class="widget-value" id="quote-price"></p>
-              <p class="widget-detail"><span class="quote-change" id="quote-change"></span> <span id="quote-time"></span></p>
-            </section>
-          </div>
+          <section class="sea glass" id="sea" aria-label="Mar em Fortaleza" hidden>
+            <div class="sea-now">
+              <p class="widget-label">Ondas · Fortaleza</p>
+              <p class="widget-value" id="sea-waves"></p>
+              <p class="widget-detail" id="sea-detail"></p>
+            </div>
+            <div class="sea-tide">
+              <p class="widget-label">Maré</p>
+              <svg class="tide-chart" id="sea-chart" viewBox="0 0 300 72" aria-hidden="true"></svg>
+              <p class="widget-detail" id="sea-tide"></p>
+            </div>
+            <div class="sea-air" id="sea-air" hidden>
+              <p class="widget-label">Vento</p>
+              <p class="widget-value" id="sea-wind"></p>
+              <p class="widget-detail" id="sea-weather"></p>
+            </div>
+          </section>
           <section class="forecast glass" id="forecast" aria-label="Previsão do tempo em Fortaleza" hidden>
             <div>
               <p class="widget-label">Agora</p>

@@ -38,7 +38,7 @@ p, h1, h2 { margin: 0; }
   border: 1px solid rgba(255, 255, 255, .10);
 }
 
-.top { display: flex; justify-content: space-between; align-items: flex-start; }
+.top { display: flex; justify-content: space-between; align-items: flex-start; gap: 3vw; }
 
 .date, .widget-label, .shelf-title {
   font-size: .975vw;
@@ -58,16 +58,12 @@ p, h1, h2 { margin: 0; }
 
 .side { display: flex; flex-direction: column; gap: .9vw; }
 
-.widgets { display: flex; gap: .9vw; align-items: stretch; }
-
-.quote, .sea, .forecast {
+.sea, .forecast {
   padding: .9vw 1.2vw;
   border-radius: .975vw;
 }
 
-.quote { min-width: 11.25vw; text-align: right; }
-
-.quote[hidden], .sea[hidden], .sea-air[hidden], .forecast[hidden] { display: none; }
+.sea[hidden], .sea-air[hidden], .forecast[hidden], .info[hidden] { display: none; }
 
 .widget-value {
   margin-top: .225vw;
@@ -87,8 +83,8 @@ p, h1, h2 { margin: 0; }
 
 .sea, .forecast { display: flex; gap: 1.5vw; }
 
-/* The beach card takes the width left by the dollar, so both rows end at the same edges. */
-.sea { flex: 1; justify-content: space-between; }
+/* The side column is as wide as the forecast panel; the beach card spreads its columns across it. */
+.sea { justify-content: space-between; }
 
 .widget-value .low { color: rgba(235, 235, 245, .6); }
 
@@ -125,8 +121,28 @@ p, h1, h2 { margin: 0; }
 .tide-now-line { stroke: rgba(255, 255, 255, .35); stroke-width: 1.5; stroke-dasharray: 3 4; }
 .tide-now { fill: #f5f5f7; }
 
-.quote-change.up { color: #30d158; }
-.quote-change.down { color: #ff453a; }
+/* Lists under the clock: plain text, no panels. */
+.info { margin-top: 1.5vw; }
+
+.info-list {
+  margin: .3vw 0 0;
+  padding: 0;
+  list-style: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.info-list li {
+  display: grid;
+  gap: .9vw;
+  font-size: .975vw;
+  line-height: 1.55;
+}
+
+.market-list li { grid-template-columns: 4.5vw 6.5vw 3.6vw auto; }
+.market-price, .market-change { text-align: right; }
+.market-change.up { color: #30d158; }
+.market-change.down { color: #ff453a; }
+.market-time { color: rgba(235, 235, 245, .6); }
 
 .shelves { display: flex; flex-direction: column; gap: 1.05vw; }
 

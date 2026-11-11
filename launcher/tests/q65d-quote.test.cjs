@@ -8,31 +8,39 @@ const source = fs.readFileSync(
   path.join(__dirname, "..", "layouts", "q65d-2123", "quote.js"),
   "utf8"
 );
+const DAY = 24 * 60 * 60 * 1000;
 const NOW = new Date(2026, 10, 11, 9, 30).getTime();
+const seconds = date => String(Math.floor(date.getTime() / 1000));
+
+function pair(code, bid, pctChange, at) {
+  return { code, codein: "BRL", bid, pctChange, timestamp: seconds(at) };
+}
 
 function payload(overrides = {}) {
-  return {
-    USDBRL: Object.assign({
-      code: "USD",
-      codein: "BRL",
-      bid: "5.5829",
-      pctChange: "1.348796",
-      timestamp: String(Math.floor(new Date(2026, 10, 11, 9, 5).getTime() / 1000))
-    }, overrides)
-  };
+  return Object.assign({
+    USDBRL: pair("USD", "5.5829", "1.348796", new Date(2026, 10, 10, 19, 5)),
+    EURBRL: pair("EUR", "6.2331", "-0.032073", new Date(2026, 10, 11, 9, 11)),
+    BTCBRL: pair("BTC", "410824.4", "0.001", new Date(2026, 10, 11, 9, 28))
+  }, overrides);
+}
+
+function element(id) {
+  const node = { id, hidden: id === "market", textContent: "", className: "", children: [] };
+  node.appendChild = child => { node.children.push(child); return child; };
+  node.removeChild = child => { node.children.splice(node.children.indexOf(child), 1); return child; };
+  Object.defineProperty(node, "firstChild", { get: () => node.children[0] || null });
+  return node;
 }
 
 function createQuote(responses) {
-  const elements = {};
-  for (const id of ["quote", "quote-price", "quote-change", "quote-time"]) {
-    elements[id] = { id, hidden: id === "quote", textContent: "", className: "" };
-  }
+  const elements = { market: element("market"), "market-list": element("market-list") };
   const timers = new Map();
   let timerID = 0;
   const requests = [];
   const document = {
     hidden: false,
     getElementById(id) { return elements[id] || null; },
+    createElement(name) { return Object.assign(element(name), { name }); },
     addEventListener() {},
     removeEventListener() {}
   };
@@ -47,69 +55,76 @@ function createQuote(responses) {
     setTimeout(callback, delay) { timers.set(++timerID, { callback, delay }); return timerID; },
     clearTimeout(id) { timers.delete(id); }
   };
+  const clock = { now: NOW };
   const RealDate = Date;
   class FixedDate extends RealDate {
-    constructor(...args) { super(...(args.length ? args : [NOW])); }
-    static now() { return NOW; }
+    constructor(...args) { super(...(args.length ? args : [clock.now])); }
+    static now() { return clock.now; }
   }
-  vm.runInNewContext(source, { window, document, console, Date: FixedDate, Number, Math, String, Promise },
-    { filename: "quote.js" });
-  return { quote: window.LauncherQuote, elements, timers, requests };
+  vm.runInNewContext(source, { window, document, console, Date: FixedDate }, { filename: "quote.js" });
+  return { quote: window.LauncherQuote, elements, timers, requests, clock };
 }
 
 const settle = () => new Promise(resolve => setImmediate(resolve));
+const rows = h => h.elements["market-list"].children.map(row => row.children.map(cell => cell.textContent));
 
-test("shows the dollar in reais with the change and time of the quote", async () => {
+test("lists the dollar, the euro and bitcoin in reais with change and time", async () => {
   const h = createQuote([payload()]);
   await settle();
-  assert.equal(h.requests[0].url, "https://economia.awesomeapi.com.br/json/last/USD-BRL");
+  assert.equal(h.requests[0].url, "https://economia.awesomeapi.com.br/json/last/USD-BRL,EUR-BRL,BTC-BRL");
   assert.equal(h.requests[0].options.credentials, "omit");
-  assert.equal(h.elements.quote.hidden, false);
-  assert.equal(h.elements["quote-price"].textContent, "R$ 5,58");
-  assert.equal(h.elements["quote-change"].textContent, "+1,35%");
-  assert.equal(h.elements["quote-change"].className, "quote-change up");
-  assert.equal(h.elements["quote-time"].textContent, "às 09:05");
+  assert.equal(h.requests[0].options.cache, "no-cache");
+  assert.equal(h.elements.market.hidden, false);
+  assert.deepEqual(rows(h), [
+    ["Dólar", "R$ 5,58", "+1,35%", "10/11 19:05"],
+    ["Euro", "R$ 6,23", "−0,03%", "09:11"],
+    ["Bitcoin", "R$ 410.824", "0,00%", "09:28"]
+  ]);
+  assert.deepEqual(h.elements["market-list"].children[0].children.map(cell => cell.className),
+    ["market-name", "market-price", "market-change up", "market-time"]);
+  assert.equal(h.elements["market-list"].children[1].children[2].className, "market-change down");
+  assert.equal(h.elements["market-list"].children[2].children[2].className, "market-change flat");
 });
 
-test("formats falls, flat days and quotes from an earlier day", () => {
+test("leaves out an implausible pair and rejects a payload with none", () => {
   const { quote } = createQuote([new Error("offline")]);
-  const friday = new Date(2026, 10, 6, 17, 59).getTime();
-  assert.deepEqual(
-    JSON.parse(JSON.stringify(quote.format({ bid: 5.4, change: -0.256, time: friday }, NOW))),
-    { price: "R$ 5,40", change: "−0,26%", direction: "down", time: "06/11 17:59" }
-  );
-  assert.equal(quote.format({ bid: 5.4, change: 0.001, time: NOW }, NOW).direction, "flat");
-  assert.equal(quote.format({ bid: 5.4, change: 0.001, time: NOW }, NOW).change, "0,00%");
-});
-
-test("rejects data that is not a plausible USD-BRL quote", () => {
-  const { quote } = createQuote([new Error("offline")]);
-  for (const value of [
-    null,
-    {},
-    payload({ code: "EUR" }),
-    payload({ bid: "abc" }),
-    payload({ bid: "0" }),
-    payload({ bid: "500" }),
-    payload({ pctChange: "80" }),
-    payload({ timestamp: "soon" })
+  const at = new Date(2026, 10, 11, 9, 0);
+  for (const broken of [
+    { USDBRL: pair("EUR", "5.5", "1", at) },
+    { USDBRL: pair("USD", "abc", "1", at) },
+    { USDBRL: pair("USD", "0", "1", at) },
+    { USDBRL: pair("USD", "500", "1", at) },
+    { USDBRL: pair("USD", "5.5", "80", at) },
+    { USDBRL: Object.assign(pair("USD", "5.5", "1", at), { timestamp: "soon" }) },
+    { BTCBRL: pair("BTC", "12", "1", at) }
   ]) {
-    assert.equal(quote.parse(value), null);
+    const name = Object.keys(broken)[0];
+    const parsed = quote.parse(payload(broken));
+    assert.equal(parsed.length, 2, name);
+    assert.ok(parsed.every(entry => entry.pair.key !== name));
   }
-  assert.equal(quote.parse(payload()).bid, 5.5829);
+  assert.equal(quote.parse(null), null);
+  assert.equal(quote.parse({}), null);
 });
 
-test("keeps the last quote when a refresh fails and hides a quote older than four days", async () => {
+test("keeps the last quotes when a refresh fails and drops each one after four days", async () => {
   const h = createQuote([payload(), new Error("offline")]);
   await settle();
   await h.quote.refresh();
-  assert.equal(h.elements.quote.hidden, false);
-  assert.equal(h.elements["quote-price"].textContent, "R$ 5,58");
+  assert.equal(rows(h).length, 3);
 
-  const old = String(Math.floor((NOW - 5 * 24 * 60 * 60 * 1000) / 1000));
-  const stale = createQuote([payload({ timestamp: old })]);
+  const expiry = [...h.timers.values()].find(timer => timer.callback.name === "render");
+  assert.equal(expiry.delay, new Date(2026, 10, 10, 19, 5).getTime() + 4 * DAY - NOW);
+  h.clock.now = new Date(2026, 10, 10, 19, 5).getTime() + 4 * DAY + 1;
+  expiry.callback();
+  assert.deepEqual(rows(h).map(row => row[0]), ["Euro", "Bitcoin"]);
+
+  const old = new Date(NOW - 5 * DAY);
+  const stale = createQuote([payload({
+    USDBRL: pair("USD", "5.5", "1", old), EURBRL: pair("EUR", "6.2", "1", old), BTCBRL: pair("BTC", "400000", "1", old)
+  })]);
   await settle();
-  assert.equal(stale.elements.quote.hidden, true);
+  assert.equal(stale.elements.market.hidden, true);
 });
 
 test("refreshes every ten minutes and stop cancels the timers", async () => {
