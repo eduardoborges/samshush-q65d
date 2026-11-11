@@ -1405,6 +1405,7 @@ class LaunchTargetTests(unittest.TestCase):
             "ui.js",
             "device.js",
             "quote.js",
+            "sea.js",
         ):
             self.assertEqual(files[name], (target.layout / name).read_bytes())
         for name in ("weather.js", "time-controls.js", "icon.png", "water-lilies.jpg"):

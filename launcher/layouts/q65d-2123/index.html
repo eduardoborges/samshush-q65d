@@ -4,13 +4,14 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://economia.awesomeapi.com.br; object-src 'none'; base-uri 'none'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://economia.awesomeapi.com.br https://marine-api.open-meteo.com; object-src 'none'; base-uri 'none'">
     <title>Home — preview</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="styles.css">
     <script src="device.js" defer></script>
     <script src="ui.js" defer></script>
     <script src="quote.js" defer></script>
+    <script src="sea.js" defer></script>
   </head>
   <body>
     <div class="backdrop" aria-hidden="true"></div>
@@ -20,11 +21,25 @@
           <p class="date" id="date"></p>
           <time class="clock" id="clock" aria-label="Hora atual"></time>
         </div>
-        <section class="quote glass" id="quote" aria-label="Cotação do dólar" hidden>
-          <p class="quote-label">Dólar</p>
-          <p class="quote-price" id="quote-price"></p>
-          <p class="quote-detail"><span class="quote-change" id="quote-change"></span> <span id="quote-time"></span></p>
-        </section>
+        <div class="widgets">
+          <section class="sea glass" id="sea" aria-label="Mar em Fortaleza" hidden>
+            <div class="sea-now">
+              <p class="widget-label">Ondas · Fortaleza</p>
+              <p class="widget-value" id="sea-waves"></p>
+              <p class="widget-detail" id="sea-detail"></p>
+            </div>
+            <div class="sea-tide">
+              <p class="widget-label">Maré</p>
+              <svg class="tide-chart" id="sea-chart" viewBox="0 0 300 90" aria-hidden="true"></svg>
+              <p class="widget-detail" id="sea-tide"></p>
+            </div>
+          </section>
+          <section class="quote glass" id="quote" aria-label="Cotação do dólar" hidden>
+            <p class="widget-label">Dólar</p>
+            <p class="widget-value" id="quote-price"></p>
+            <p class="widget-detail"><span class="quote-change" id="quote-change"></span> <span id="quote-time"></span></p>
+          </section>
+        </div>
       </header>
 
       <h1 class="visually-hidden" id="selection-title">YouTube</h1>
