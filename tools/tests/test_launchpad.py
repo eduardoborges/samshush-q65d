@@ -43,6 +43,11 @@ MANIFEST = WEATHER_MANIFEST.replace(
 LEGACY_MANIFEST = WEATHER_MANIFEST.replace(
     b'<tizen:privilege name="http://tizen.org/privilege/internet"/>\n', b""
 ).replace(b'<access origin="https://api.open-meteo.com" subdomains="false"/>\n', b"")
+QUOTE_MANIFEST = MANIFEST.replace(
+    b'<access origin="https://api.open-meteo.com" subdomains="false"/>\n',
+    b'<access origin="https://api.open-meteo.com" subdomains="false"/>\n'
+    b'<access origin="https://economia.awesomeapi.com.br" subdomains="false"/>\n',
+)
 DIGESTS = {
     "sha256": "http://www.w3.org/2001/04/xmlenc#sha256",
     "sha512": "http://www.w3.org/2001/04/xmlenc#sha512",
@@ -118,6 +123,60 @@ class LaunchpadTests(unittest.TestCase):
     def verify(self, members=None, **kwargs):
         write_widget(self.widget, members or signed_members(self.resources), **kwargs)
         return launchpad.verify_widget(self.widget, self.source)
+
+    def quote_layout(self):
+        layout = self.root / "layout"
+        layout.mkdir()
+        (layout / "config.xml").write_bytes(QUOTE_MANIFEST)
+        (layout / "quote.js").write_bytes(b"window.testQuote = true;")
+        (layout / "unlisted.js").write_bytes(b"ignored")
+        self.resources["config.xml"] = QUOTE_MANIFEST
+        self.resources["quote.js"] = b"window.testQuote = true;"
+        return layout
+
+    def test_layout_extras_and_their_origin_are_packaged_only_together(self):
+        layout = self.quote_layout()
+        files = launchpad.source_files(self.source, layout)
+        self.assertEqual(files["quote.js"], b"window.testQuote = true;")
+        self.assertNotIn("unlisted.js", files)
+        write_widget(self.widget, signed_members(self.resources))
+        self.assertEqual(
+            launchpad.verify_widget(self.widget, self.source, layout).app,
+            "Gxqk7W2na5.Shortcuts",
+        )
+        self.assertEqual(
+            launchpad.signed_widget_resources(self.widget, previous=True)[1][
+                "quote.js"
+            ],
+            b"window.testQuote = true;",
+        )
+        without_quote = {k: v for k, v in self.resources.items() if k != "quote.js"}
+        write_widget(self.widget, signed_members(without_quote))
+        with self.assertRaises(ValueError):
+            launchpad.verify_widget(self.widget, self.source, layout)
+
+    def test_quote_origin_requires_the_quote_module(self):
+        resources = dict.fromkeys(launchpad.RESOURCES)
+        with self.assertRaisesRegex(ValueError, "network access"):
+            launchpad.manifest_identity(QUOTE_MANIFEST, resources)
+        launchpad.manifest_identity(QUOTE_MANIFEST, resources | {"quote.js": None})
+        for manifest in (
+            MANIFEST,
+            QUOTE_MANIFEST.replace(b"economia.awesomeapi.com.br", b"example.com"),
+            QUOTE_MANIFEST.replace(
+                b'awesomeapi.com.br" subdomains="false"',
+                b'awesomeapi.com.br" subdomains="true"',
+            ),
+        ):
+            with self.subTest(manifest=manifest), self.assertRaises(ValueError):
+                launchpad.manifest_identity(manifest, resources | {"quote.js": None})
+
+    def test_layout_extras_cannot_be_symlinks(self):
+        layout = self.quote_layout()
+        (layout / "quote.js").unlink()
+        (layout / "quote.js").symlink_to(self.source / "ui.js")
+        with self.assertRaises(ValueError):
+            launchpad.source_files(self.source, layout)
 
     def test_exact_resources_and_sdk_sha512_digests_are_structurally_valid(self):
         for algorithm in DIGESTS:

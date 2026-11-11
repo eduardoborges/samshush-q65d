@@ -39,6 +39,9 @@ WEATHER_RESOURCES = (
 RESOURCES = WEATHER_RESOURCES + ("time-controls.js",)
 WEATHER_CONFIG = "weather-config.json"
 WEATHER_ORIGIN = "https://api.open-meteo.com"
+QUOTE_ORIGIN = "https://economia.awesomeapi.com.br"
+# Modules a layout may add beyond the Frame resources; each one unlocks only its own origin.
+LAYOUT_EXTRAS = ("quote.js",)
 LEGACY_RESOURCES = tuple(name for name in WEATHER_RESOURCES if name != "weather.js")
 SIGNATURES = ("author-signature.xml", "signature1.xml")
 PRIVILEGES = {
@@ -163,16 +166,25 @@ def manifest_identity(data, resources=RESOURCES):
     ):
         raise ValueError("Unexpected launcher privileges")
     access = widget.findall(WIDGET_NS + "access")
-    if "weather.js" not in resources:
-        valid_access = not access
-    else:
-        valid_access = (
-            len(access) == 1
-            and access[0].attrib == {"origin": WEATHER_ORIGIN, "subdomains": "false"}
-            and not len(access[0])
+    origins = set()
+    if "weather.js" in resources:
+        origins.add(WEATHER_ORIGIN)
+    if "quote.js" in resources:
+        origins.add(QUOTE_ORIGIN)
+    valid_access = (
+        len(access) == len(origins)
+        and {node.get("origin") for node in access} == origins
+        and all(
+            set(node.attrib) == {"origin", "subdomains"}
+            and node.get("subdomains") == "false"
+            and not len(node)
+            for node in access
         )
+    )
     if not valid_access:
-        raise ValueError("Launcher network access must be limited to the weather API")
+        raise ValueError(
+            "Launcher network access must be limited to the weather and quote APIs"
+        )
     if any(
         widget.findall(tag)
         for tag in (
@@ -283,7 +295,14 @@ def source_files(source=SOURCE, layout=None):
         if path.is_symlink() or not path.is_file() or path.stat().st_size > limit:
             raise ValueError(f"Missing or invalid launcher resource: {name}")
         files[name] = path.read_bytes()
-    manifest_identity(files["config.xml"])
+    for name in LAYOUT_EXTRAS if layout is not None else ():
+        path = layout / name
+        if not (path.exists() or path.is_symlink()):
+            continue
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > 1024 * 1024:
+            raise ValueError(f"Invalid launcher layout resource: {name}")
+        files[name] = path.read_bytes()
+    manifest_identity(files["config.xml"], files)
     return files
 
 
@@ -296,9 +315,15 @@ def signed_widget_resources(path, source=SOURCE, *, previous=False, layout=None)
         with zipfile.ZipFile(path) as archive:
             members = archive.infolist()
             names = [item.filename for item in members]
-            resources = RESOURCES + (WEATHER_CONFIG,)
+            resources = (tuple(expected) if expected is not None else RESOURCES) + (
+                WEATHER_CONFIG,
+            )
             if previous:
-                for old in (LEGACY_RESOURCES, WEATHER_RESOURCES + (WEATHER_CONFIG,)):
+                for old in (
+                    LEGACY_RESOURCES,
+                    WEATHER_RESOURCES + (WEATHER_CONFIG,),
+                    RESOURCES + LAYOUT_EXTRAS + (WEATHER_CONFIG,),
+                ):
                     if set(names) == set(old + SIGNATURES):
                         resources = old
                         break
@@ -466,7 +491,9 @@ def build(
         "package_id": identity.package,
         "sha256": hashlib.sha256(target.read_bytes()).hexdigest(),
         "source_sha256": {
-            name: hashlib.sha256(files[name]).hexdigest() for name in RESOURCES
+            name: hashlib.sha256(data).hexdigest()
+            for name, data in files.items()
+            if name != WEATHER_CONFIG
         },
         "layout": layout.name if layout is not None else None,
         "weather": coordinates,
