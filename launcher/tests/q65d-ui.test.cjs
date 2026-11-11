@@ -35,11 +35,6 @@ class Node {
     }
     return this;
   }
-  replaceChildren(...children) {
-    for (const child of this.children) child.parentNode = null;
-    this.children = [];
-    return this.append(...children);
-  }
   descendants() {
     return this.children.flatMap(child => [child, ...child.descendants()]);
   }
@@ -68,6 +63,8 @@ function tile(document, id, label, url) {
   return node;
 }
 
+// The page's rows: the headline and its buttons in the header, hidden until the feed loads, then
+// the shelves.
 function createUI() {
   const listeners = {};
   const document = {
@@ -81,12 +78,15 @@ function createUI() {
   for (const id of ["selection-title", "action-error", "clock", "date"]) ids[id] = new Node(document);
   const news = new Node(document);
   news.hidden = true;
-  const newsRow = new Node(document, ["tiles"]);
-  news.append(newsRow);
+  const slider = new Node(document, ["tiles"]).append(
+    tile(document, "news", "Manchete", "https://g1.globo.com/1.ghtml"));
+  const controls = new Node(document, ["tiles"]).append(
+    tile(document, "news-previous", "Notícia anterior"), tile(document, "news-next", "Próxima notícia"));
+  controls.dataset.start = "1";
+  news.append(slider, controls);
   const apps = new Node(document, ["tiles"]).append(
     tile(document, "youtube", "YouTube"), tile(document, "stremio", "Stremio"), tile(document, "spotify", "Spotify"));
   const inputs = new Node(document, ["tiles"]).append(tile(document, "tv", "TV ao vivo"));
-  // Page order: the news row sits in the header, above the shelves.
   body.append(news, apps, inputs);
   document.getElementById = id => ids[id] || null;
   document.querySelectorAll = selector => body.querySelectorAll(selector);
@@ -99,73 +99,78 @@ function createUI() {
     },
     setInterval() {}
   };
-  vm.runInNewContext(source, { window, document, console, Promise, WeakMap, Date }, { filename: "ui.js" });
+  vm.runInNewContext(source, { window, document, console, Promise, Map, WeakMap, Date }, { filename: "ui.js" });
   const key = name => listeners.keydown({ key: name, preventDefault() {} });
   const selected = () => body.descendants().filter(node => node.classes.has("selected")).map(node => node.dataset.id);
-  const headlines = count => Array.from({ length: count }, (_, index) =>
-    tile(document, `news-${index}`, `Manchete ${index}`, `https://g1.globo.com/${index}.ghtml`));
-  return { ui: window.LauncherUI, document, news, newsRow, ids, actions, key, selected, headlines };
+  const show = () => {
+    news.hidden = false;
+    window.LauncherUI.refresh();
+  };
+  return { ui: window.LauncherUI, document, news, ids, actions, key, selected, show };
 }
 
 const settle = () => new Promise(resolve => setImmediate(resolve));
+const plain = value => JSON.parse(JSON.stringify(value));
 
-test("starts on YouTube and leaves hidden or empty rows out of navigation", () => {
+test("starts on YouTube and leaves the hidden headline row out of navigation", () => {
   const h = createUI();
   assert.deepEqual(h.selected(), ["youtube"]);
   assert.equal(h.document.activeElement.dataset.id, "youtube");
   assert.equal(h.ids["selection-title"].textContent, "YouTube");
   h.key("ArrowUp");
   assert.deepEqual(h.selected(), ["youtube"]);
-
-  // A hidden section stays out even while it still holds tiles.
-  h.newsRow.append(...h.headlines(2));
   h.ui.refresh();
   h.key("ArrowUp");
   assert.deepEqual(h.selected(), ["youtube"]);
 });
 
-test("headlines added later keep the selection and become a row above the apps", async () => {
+test("shown headline rows keep the selection and start on the next button under the headline", async () => {
   const h = createUI();
   h.key("ArrowRight");
-  h.newsRow.append(...h.headlines(4));
-  h.news.hidden = false;
-  h.ui.refresh();
+  h.show();
   assert.deepEqual(h.selected(), ["stremio"]);
   assert.equal(h.document.activeElement.dataset.id, "stremio");
 
   h.key("ArrowUp");
-  h.key("ArrowRight");
-  h.key("ArrowRight");
-  assert.deepEqual(h.selected(), ["news-2"]);
-  assert.equal(h.ids["selection-title"].textContent, "Manchete 2");
+  assert.deepEqual(h.selected(), ["news-next"]);
+  h.key("ArrowUp");
+  assert.deepEqual(h.selected(), ["news"]);
+  assert.equal(h.ids["selection-title"].textContent, "Manchete");
   h.key("Enter");
   await settle();
-  assert.deepEqual(JSON.parse(JSON.stringify(h.actions)),
-    [{ id: "news", type: "link", url: "https://g1.globo.com/2.ghtml" }]);
+  assert.deepEqual(plain(h.actions), [{ id: "news", type: "link", url: "https://g1.globo.com/1.ghtml" }]);
 
+  h.key("ArrowDown");
+  h.key("ArrowLeft");
+  assert.deepEqual(h.selected(), ["news-previous"]);
   h.key("ArrowDown");
   assert.deepEqual(h.selected(), ["stremio"]);
   h.key("ArrowUp");
-  assert.deepEqual(h.selected(), ["news-2"]);
+  assert.deepEqual(h.selected(), ["news-previous"]);
 });
 
-test("rebuilt headlines keep the focused column, and a vanished row returns to YouTube", () => {
+test("the headline buttons run their module's handler instead of a TV action", async () => {
   const h = createUI();
-  h.newsRow.append(...h.headlines(4));
-  h.news.hidden = false;
-  h.ui.refresh();
+  const pressed = [];
+  h.ui.setControl("news-previous", () => pressed.push("previous"));
+  h.ui.setControl("news-next", () => pressed.push("next"));
+  h.show();
   h.key("ArrowUp");
-  h.key("ArrowRight");
-  h.key("ArrowRight");
-  h.key("ArrowRight");
-  assert.deepEqual(h.selected(), ["news-3"]);
+  h.key("Enter");
+  h.key("ArrowLeft");
+  h.key("Enter");
+  await settle();
+  assert.deepEqual(pressed, ["next", "previous"]);
+  assert.deepEqual(h.actions, []);
+  assert.deepEqual(h.selected(), ["news-previous"]);
+});
 
-  h.newsRow.replaceChildren(...h.headlines(2));
-  h.ui.refresh();
-  assert.deepEqual(h.selected(), ["news-1"]);
-  assert.equal(h.document.activeElement, h.newsRow.children[1]);
-
-  h.newsRow.replaceChildren();
+test("hiding the headline row while it has the focus returns to YouTube", () => {
+  const h = createUI();
+  h.show();
+  h.key("ArrowUp");
+  h.key("ArrowUp");
+  assert.deepEqual(h.selected(), ["news"]);
   h.news.hidden = true;
   h.ui.refresh();
   assert.deepEqual(h.selected(), ["youtube"]);
@@ -177,6 +182,6 @@ test("app tiles still map to their fixed actions", async () => {
   h.key("ArrowDown");
   h.key("Enter");
   await settle();
-  assert.deepEqual(JSON.parse(JSON.stringify(h.actions)), [{ id: "tv", type: "source" }]);
-  assert.deepEqual(JSON.parse(JSON.stringify(h.ui.getSelection())), { id: "tv", type: "source" });
+  assert.deepEqual(plain(h.actions), [{ id: "tv", type: "source" }]);
+  assert.deepEqual(plain(h.ui.getSelection()), { id: "tv", type: "source" });
 });

@@ -53,6 +53,22 @@ SEA_MANIFEST = QUOTE_MANIFEST.replace(
     b'<access origin="https://economia.awesomeapi.com.br" subdomains="false"/>\n'
     b'<access origin="https://marine-api.open-meteo.com" subdomains="false"/>\n',
 )
+
+
+def access(origin):
+    return f'<access origin="{origin}" subdomains="false"/>\n'.encode()
+
+
+NEWS_MANIFEST = MANIFEST.replace(
+    b"</widget>",
+    access("https://falkor-cda.bastian.globo.com")
+    + access("https://s2-g1.glbimg.com")
+    + b"</widget>",
+)
+# The release before the news slider read the g1 RSS feed.
+RSS_NEWS_MANIFEST = MANIFEST.replace(
+    b"</widget>", access("https://g1.globo.com") + b"</widget>"
+)
 DIGESTS = {
     "sha256": "http://www.w3.org/2001/04/xmlenc#sha256",
     "sha512": "http://www.w3.org/2001/04/xmlenc#sha512",
@@ -195,16 +211,24 @@ class LaunchpadTests(unittest.TestCase):
         launchpad.manifest_identity(
             MANIFEST, resources | {"forecast.js": None, "moon.js": None}
         )
-        news = MANIFEST.replace(
-            b'<access origin="https://api.open-meteo.com" subdomains="false"/>\n',
-            b'<access origin="https://api.open-meteo.com" subdomains="false"/>\n'
-            b'<access origin="https://g1.globo.com" subdomains="false"/>\n',
-        )
-        launchpad.manifest_identity(news, resources | {"news.js": None})
+        launchpad.manifest_identity(NEWS_MANIFEST, resources | {"news.js": None})
         with self.assertRaisesRegex(ValueError, "network access"):
-            launchpad.manifest_identity(news, resources)
+            launchpad.manifest_identity(NEWS_MANIFEST, resources)
         with self.assertRaisesRegex(ValueError, "network access"):
             launchpad.manifest_identity(MANIFEST, resources | {"news.js": None})
+        duplicate = NEWS_MANIFEST.replace(
+            b"</widget>", access(launchpad.NEWS_ORIGIN) + b"</widget>"
+        )
+        with self.assertRaisesRegex(ValueError, "network access"):
+            launchpad.manifest_identity(duplicate, resources | {"news.js": None})
+        # The news feed and its photos are unlocked together, never one alone.
+        for origin in (launchpad.NEWS_ORIGIN, launchpad.NEWS_IMAGE_ORIGIN):
+            alone = NEWS_MANIFEST.replace(access(origin), b"")
+            with (
+                self.subTest(missing=origin),
+                self.assertRaisesRegex(ValueError, "network access"),
+            ):
+                launchpad.manifest_identity(alone, resources | {"news.js": None})
         with self.assertRaisesRegex(ValueError, "network access"):
             launchpad.manifest_identity(
                 SEA_MANIFEST.replace(b"marine-api.open-meteo.com", b"example.com"),
@@ -242,6 +266,25 @@ class LaunchpadTests(unittest.TestCase):
                     {name for name in launchpad.LAYOUT_EXTRAS if name in files},
                     {name for name in launchpad.LAYOUT_EXTRAS if name in resources},
                 )
+
+    def test_retired_news_origin_is_accepted_only_in_a_previous_widget(self):
+        resources = dict.fromkeys(launchpad.RESOURCES) | {"news.js": None}
+        launchpad.manifest_identity(RSS_NEWS_MANIFEST, resources, previous=True)
+        with self.assertRaisesRegex(ValueError, "network access"):
+            launchpad.manifest_identity(RSS_NEWS_MANIFEST, resources)
+        mixed = RSS_NEWS_MANIFEST.replace(
+            b"</widget>", access(launchpad.NEWS_IMAGE_ORIGIN) + b"</widget>"
+        )
+        with self.assertRaisesRegex(ValueError, "network access"):
+            launchpad.manifest_identity(mixed, resources, previous=True)
+
+        previous = self.resources | {
+            "config.xml": RSS_NEWS_MANIFEST,
+            "news.js": b"window.testNews = true;",
+        }
+        write_widget(self.widget, signed_members(previous))
+        files = launchpad.signed_widget_resources(self.widget, previous=True)[1]
+        self.assertEqual(files["news.js"], b"window.testNews = true;")
 
     def test_layout_extras_cannot_be_symlinks(self):
         layout = self.quote_layout()
@@ -1168,6 +1211,24 @@ class LaunchpadDeviceTests(unittest.TestCase):
         self.assertEqual(len(self.sdk_calls), 1)
         self.assertEqual(
             self.sdk_calls[0][4:6], ("vd_appinstall", "Gxqk7W2na5.Shortcuts")
+        )
+
+    def test_update_accepts_a_previous_widget_with_the_retired_news_origin(self):
+        self.initial_phase = "applied"
+        self.previous_resources = self.resources | {
+            "config.xml": RSS_NEWS_MANIFEST,
+            "news.js": b"previous news feed",
+        }
+        write_widget(self.previous_widget, signed_members(self.previous_resources))
+        result, evidence = self.run_operation("update")
+        self.assertEqual(result, 0, evidence)
+        resource_checks = [
+            script
+            for script in self.device_scripts
+            if "LAUNCHPAD_RESOURCES_VERIFIED" in script
+        ]
+        self.assertIn(
+            hashlib.sha256(b"previous news feed").hexdigest(), resource_checks[0]
         )
 
     def test_update_requires_an_applied_matching_home_journal_before_upload(self):

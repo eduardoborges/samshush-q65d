@@ -1,70 +1,72 @@
-/* Latest headlines from the public g1 RSS feed: https://g1.globo.com/rss/g1/
-   Each headline is a tile that opens its article in the TV browser. Feed text is written with
-   textContent only, so feed markup can never reach the page. */
+/* Headlines from the g1 home page, read from the JSON feed the page itself loads. The feed is not
+   documented and may change without notice; the block then hides as after any failed request. It
+   has 540×304 photos, where the public RSS feed links only the full-size originals.
+   One headline shows at a time and the slides advance every 8 seconds, except while the focus is
+   on the block. Feed text is written with textContent only, so feed markup can never reach the page. */
 (function () {
   "use strict";
 
-  var url = "https://g1.globo.com/rss/g1/";
+  var url = "https://falkor-cda.bastian.globo.com/tenants/g1/instances/" +
+    "4af56893-1f9a-4504-9531-74458e481f91/posts/page/1";
   var refreshDelay = 30 * 60 * 1000;
   var requestTimeout = 20 * 1000;
   var maxAge = 6 * 60 * 60 * 1000;
-  // The feed is about 400 KB; anything far larger is not the feed.
+  // The feed is about 130 KB; anything far larger is not the feed.
   var maxLength = 2 * 1024 * 1024;
-  var shown = 4;
-  // At night the feed fills with automated city forecasts, which the forecast panel already covers.
-  var automated = /^Previsão do tempo hoje para /;
-  var entities = { quot: "\"", apos: "'", lt: "<", gt: ">", amp: "&" };
+  var shown = 6;
+  var slideDelay = 8 * 1000;
   var container = document.getElementById("news");
-  var list = document.getElementById("news-list");
+  var slide = document.getElementById("news-slide");
+  var track = document.getElementById("news-track");
+  var dots = document.getElementById("news-dots");
   var refreshTimer = null;
   var expiryTimer = null;
+  var slideTimer = null;
   var busy = false;
   var stopped = false;
   var lastNews = null;
   var drawn = "";
+  var headlines = [];
+  var position = 0;
 
-  function character(code, original) {
-    try { return String.fromCodePoint(code); } catch (error) { return original; }
+  function text(value) {
+    return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
   }
 
-  // Plain text from an RSS field: CDATA unwrapped, entities decoded in one pass, spaces collapsed.
-  function decode(text) {
-    return text.replace(/^\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*$/, "$1")
-      .replace(/&(#x[0-9a-f]+|#\d+|quot|apos|lt|gt|amp);/gi, function (match, name) {
-        if (name[0] !== "#") return entities[name.toLowerCase()];
-        return character(name[1].toLowerCase() === "x" ? parseInt(name.slice(2), 16) : Number(name.slice(1)), match);
-      })
-      .replace(/\s+/g, " ")
-      .trim();
-  }
-
-  // Only https g1 pages become tiles; device.js checks the same before opening one.
-  function article(value) {
-    if (value.length > 2048) return false;
+  // Articles must be https g1 pages, which device.js checks again before opening one, and photos
+  // must come from the g1 image server the page allows.
+  function link(value, host) {
+    if (typeof value !== "string" || value.length > 2048) return false;
     try {
-      var url = new URL(value);
-      return url.protocol === "https:" && url.hostname === "g1.globo.com" && !url.username && !url.password;
+      var parsed = new URL(value);
+      return parsed.protocol === "https:" && parsed.hostname === host && !parsed.username && !parsed.password;
     } catch (error) {
       return false;
     }
   }
 
-  function parse(text) {
-    if (typeof text !== "string" || text.length > maxLength || text.indexOf("<rss") < 0) return null;
-    var headlines = [];
-    var items = /<item\b[^>]*>([\s\S]*?)<\/item>/g;
-    var match;
-    while ((match = items.exec(text)) && headlines.length < shown) {
-      var title = /<title>([\s\S]*?)<\/title>/.exec(match[1]);
-      var date = /<pubDate>([\s\S]*?)<\/pubDate>/.exec(match[1]);
-      var link = /<link>([\s\S]*?)<\/link>/.exec(match[1]);
-      var headline = title ? decode(title[1]) : "";
-      var time = date ? Date.parse(decode(date[1])) : NaN;
-      var url = link ? decode(link[1]) : "";
-      if (!headline || automated.test(headline) || !Number.isFinite(time) || !article(url)) continue;
-      headlines.push({ title: headline.slice(0, 200), time: time, url: url });
+  function parse(value) {
+    var items = value && Array.isArray(value.items) ? value.items : [];
+    var found = [];
+    var seen = {};
+    for (var index = 0; index < items.length && found.length < shown; index += 1) {
+      var item = items[index] || {};
+      var content = item.content || {};
+      var title = text(content.title);
+      var time = typeof item.publication === "string" ? Date.parse(item.publication) : NaN;
+      var sizes = content.image && content.image.sizes;
+      var image = sizes && sizes.S && sizes.S.url;
+      if (!title || !Number.isFinite(time) || !link(content.url, "g1.globo.com") || seen[content.url]) continue;
+      seen[content.url] = true;
+      found.push({
+        title: title.slice(0, 200),
+        section: text(content.section).slice(0, 40),
+        time: time,
+        url: content.url,
+        image: link(image, "s2-g1.glbimg.com") ? image : ""
+      });
     }
-    return headlines.length ? headlines : null;
+    return found.length ? found : null;
   }
 
   function twoDigits(value) {
@@ -81,45 +83,101 @@
       : twoDigits(at.getDate()) + "/" + twoDigits(at.getMonth() + 1);
   }
 
-  function cell(parent, className, text) {
+  function cell(parent, className, value) {
     var node = document.createElement("span");
     node.className = className;
-    node.textContent = text;
+    node.textContent = value;
     parent.appendChild(node);
   }
 
-  function tile(headline, index, now) {
-    var button = document.createElement("button");
-    button.className = "tile news-tile";
-    button.type = "button";
-    button.tabIndex = -1;
-    button.dataset.id = "news-" + index;
-    button.dataset.url = headline.url;
-    button.setAttribute("aria-label", headline.title);
-    cell(button, "news-time", when(headline.time, now));
-    cell(button, "news-title", headline.title);
-    return button;
+  function item(headline, now) {
+    var node = document.createElement("span");
+    node.className = "news-item";
+    if (headline.image) {
+      var image = document.createElement("img");
+      image.className = "news-image";
+      image.alt = "";
+      image.decoding = "async";
+      image.referrerPolicy = "no-referrer";
+      // A photo that fails to load leaves the text on its own.
+      image.addEventListener("error", function () { node.removeChild(image); });
+      image.src = headline.image;
+      node.appendChild(image);
+    }
+    var words = document.createElement("span");
+    words.className = "news-text";
+    cell(words, "news-meta", [headline.section, when(headline.time, now)].filter(Boolean).join(" · "));
+    cell(words, "news-title", headline.title);
+    node.appendChild(words);
+    return node;
   }
 
-  // The tiles are rebuilt only when the headlines change, so a refresh never moves the focus
-  // off a headline that is still there.
+  // Moves the track to one slide and points the slide button at its article.
+  function show(index, jump) {
+    var count = headlines.length;
+    var next = (index + count) % count;
+    // Wrapping from the last slide to the first would sweep across them all, so it jumps instead.
+    track.classList.toggle("news-jump", jump || Math.abs(next - position) > 1);
+    position = next;
+    track.style.transform = "translateX(" + (-100 * position) + "%)";
+    slide.dataset.url = headlines[position].url;
+    slide.setAttribute("aria-label", headlines[position].title);
+    Array.prototype.forEach.call(dots.children, function (dot, at) {
+      dot.classList.toggle("current", at === position);
+    });
+  }
+
+  function focused() {
+    return container.contains(document.activeElement);
+  }
+
+  function scheduleSlide() {
+    window.clearTimeout(slideTimer);
+    if (!stopped && !document.hidden && headlines.length > 1) slideTimer = window.setTimeout(advance, slideDelay);
+  }
+
+  // Waits while the focus is on the block, so a headline never changes under the reader.
+  function advance() {
+    if (headlines.length > 1 && !focused()) show(position + 1, false);
+    scheduleSlide();
+  }
+
+  function step(by) {
+    if (headlines.length < 2) return;
+    show(position + by, false);
+    scheduleSlide();
+  }
+
+  // The slides are rebuilt only when the headlines change, and the one on screen stays there when
+  // it is still in the feed.
   function render() {
     var now = Date.now();
-    var fresh = lastNews && now - lastNews.fetched <= maxAge;
-    var shown = fresh ? JSON.stringify(lastNews.headlines.map(function (headline) {
-      return [headline.url, headline.title, when(headline.time, now)];
-    })) : "";
+    var fresh = lastNews && now - lastNews.fetched <= maxAge ? lastNews.headlines : [];
+    var key = JSON.stringify(fresh.map(function (headline) {
+      return [headline.url, headline.title, headline.section, headline.image, when(headline.time, now)];
+    }));
     window.clearTimeout(expiryTimer);
-    if (shown !== drawn) {
-      drawn = shown;
-      while (list.firstChild) list.removeChild(list.firstChild);
-      if (fresh) {
-        lastNews.headlines.forEach(function (headline, index) { list.appendChild(tile(headline, index, now)); });
+    if (key !== drawn) {
+      drawn = key;
+      var onScreen = headlines[position] ? headlines[position].url : "";
+      var wasHidden = container.hidden;
+      headlines = fresh;
+      while (track.firstChild) track.removeChild(track.firstChild);
+      while (dots.firstChild) dots.removeChild(dots.firstChild);
+      fresh.forEach(function (headline) {
+        track.appendChild(item(headline, now));
+        dots.appendChild(document.createElement("span"));
+      });
+      if (fresh.length) {
+        show(Math.max(0, fresh.map(function (headline) { return headline.url; }).indexOf(onScreen)), true);
       }
-      container.hidden = !fresh;
-      if (window.LauncherUI && typeof window.LauncherUI.refresh === "function") window.LauncherUI.refresh();
+      container.hidden = !fresh.length;
+      if (container.hidden !== wasHidden && window.LauncherUI && typeof window.LauncherUI.refresh === "function") {
+        window.LauncherUI.refresh();
+      }
+      scheduleSlide();
     }
-    if (fresh) expiryTimer = window.setTimeout(render, lastNews.fetched + maxAge - now);
+    if (fresh.length) expiryTimer = window.setTimeout(render, lastNews.fetched + maxAge - now);
   }
 
   function request() {
@@ -132,6 +190,9 @@
     }).then(function (response) {
       if (!response.ok) throw new Error("News request failed");
       return response.text();
+    }).then(function (body) {
+      if (body.length > maxLength) throw new Error("News feed is too large");
+      return JSON.parse(body);
     }).finally(function () { window.clearTimeout(timer); });
   }
 
@@ -145,8 +206,8 @@
     busy = true;
     window.clearTimeout(refreshTimer);
     // Keep the last headlines when a request fails; render hides them once they are too old.
-    return request().then(parse).catch(function () { return null; }).then(function (headlines) {
-      if (headlines) lastNews = { headlines: headlines, fetched: Date.now() };
+    return request().then(parse).catch(function () { return null; }).then(function (found) {
+      if (found) lastNews = { headlines: found, fetched: Date.now() };
       if (!stopped) render();
       busy = false;
       schedule();
@@ -155,20 +216,30 @@
   }
 
   function visibilityChanged() {
-    if (document.hidden) window.clearTimeout(refreshTimer);
-    else refresh();
+    if (document.hidden) {
+      window.clearTimeout(refreshTimer);
+      window.clearTimeout(slideTimer);
+      return;
+    }
+    scheduleSlide();
+    refresh();
   }
 
   function stop() {
     stopped = true;
     window.clearTimeout(refreshTimer);
     window.clearTimeout(expiryTimer);
+    window.clearTimeout(slideTimer);
     document.removeEventListener("visibilitychange", visibilityChanged);
   }
 
-  window.LauncherNews = { parse: parse, refresh: refresh, stop: stop };
-  if (!container || !list || typeof window.fetch !== "function" ||
+  window.LauncherNews = { parse: parse, refresh: refresh, step: step, stop: stop };
+  if (!container || !slide || !track || !dots || typeof window.fetch !== "function" ||
       typeof window.AbortController !== "function") return;
+  if (window.LauncherUI && typeof window.LauncherUI.setControl === "function") {
+    window.LauncherUI.setControl("news-previous", function () { step(-1); });
+    window.LauncherUI.setControl("news-next", function () { step(1); });
+  }
   document.addEventListener("visibilitychange", visibilityChanged);
   refresh();
 }());

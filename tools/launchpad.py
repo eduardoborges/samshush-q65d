@@ -41,16 +41,19 @@ WEATHER_CONFIG = "weather-config.json"
 WEATHER_ORIGIN = "https://api.open-meteo.com"
 QUOTE_ORIGIN = "https://economia.awesomeapi.com.br"
 MARINE_ORIGIN = "https://marine-api.open-meteo.com"
-NEWS_ORIGIN = "https://g1.globo.com"
-# Modules a layout may add beyond the Frame resources; each one unlocks only its own
-# origin, and None marks a module that makes no network requests.
+NEWS_ORIGIN = "https://falkor-cda.bastian.globo.com"
+NEWS_IMAGE_ORIGIN = "https://s2-g1.glbimg.com"
+# Modules a layout may add beyond the Frame resources, each with the only origins it
+# unlocks. An empty tuple marks a module that makes no network requests.
 LAYOUT_EXTRAS = {
-    "quote.js": QUOTE_ORIGIN,
-    "sea.js": MARINE_ORIGIN,
-    "forecast.js": WEATHER_ORIGIN,
-    "news.js": NEWS_ORIGIN,
-    "moon.js": None,
+    "quote.js": (QUOTE_ORIGIN,),
+    "sea.js": (MARINE_ORIGIN,),
+    "forecast.js": (WEATHER_ORIGIN,),
+    "news.js": (NEWS_ORIGIN, NEWS_IMAGE_ORIGIN),
+    "moon.js": (),
 }
+# Origins a module unlocked in an earlier release, accepted only in a previous widget.
+RETIRED_ORIGINS = {"news.js": ("https://g1.globo.com",)}
 LEGACY_RESOURCES = tuple(name for name in WEATHER_RESOURCES if name != "weather.js")
 SIGNATURES = ("author-signature.xml", "signature1.xml")
 PRIVILEGES = {
@@ -133,7 +136,20 @@ def parse_xml(data):
         raise ValueError("Invalid widget XML") from error
 
 
-def manifest_identity(data, resources=RESOURCES):
+def network_origins(resources, previous=False):
+    """Every set of access origins the packaged modules allow together."""
+    allowed = [{WEATHER_ORIGIN} if "weather.js" in resources else set()]
+    for name, origins in LAYOUT_EXTRAS.items():
+        if name not in resources:
+            continue
+        options = [set(origins)]
+        if previous and name in RETIRED_ORIGINS:
+            options.append(set(RETIRED_ORIGINS[name]))
+        allowed = [chosen | option for chosen in allowed for option in options]
+    return allowed
+
+
+def manifest_identity(data, resources=RESOURCES, *, previous=False):
     widget = parse_xml(data)
     for tag in (TIZEN_NS + "application", WIDGET_NS + "content", TIZEN_NS + "profile"):
         if len(widget.findall(tag)) != 1:
@@ -175,17 +191,10 @@ def manifest_identity(data, resources=RESOURCES):
     ):
         raise ValueError("Unexpected launcher privileges")
     access = widget.findall(WIDGET_NS + "access")
-    origins = set()
-    if "weather.js" in resources:
-        origins.add(WEATHER_ORIGIN)
-    origins.update(
-        origin
-        for name, origin in LAYOUT_EXTRAS.items()
-        if origin is not None and name in resources
-    )
+    declared = [node.get("origin") for node in access]
     valid_access = (
-        len(access) == len(origins)
-        and {node.get("origin") for node in access} == origins
+        len(declared) == len(set(declared))
+        and set(declared) in network_origins(resources, previous)
         and all(
             set(node.attrib) == {"origin", "subdomains"}
             and node.get("subdomains") == "false"
@@ -365,7 +374,7 @@ def signed_widget_resources(path, source=SOURCE, *, previous=False, layout=None)
         actual[name] != data for name, data in expected.items()
     ):
         raise ValueError("Signed widget differs from current launcher source")
-    identity = manifest_identity(actual["config.xml"], resources)
+    identity = manifest_identity(actual["config.xml"], resources, previous=previous)
     if WEATHER_CONFIG in resources:
         weather_config(actual[WEATHER_CONFIG])
     for name in SIGNATURES:
@@ -522,10 +531,12 @@ def build(
     return target
 
 
-def registration_script(identity, target, *, verify_resources=False, resources=None):
+def registration_script(
+    identity, target, *, verify_resources=False, resources=None, previous=False
+):
     """Read the one app's registration, optionally checking its installed resources."""
     files = source_files(layout=target.layout) if resources is None else resources
-    if manifest_identity(files["config.xml"], files) != identity:
+    if manifest_identity(files["config.xml"], files, previous=previous) != identity:
         raise ValueError("Launcher identity differs from this checkout")
 
     script = f"""set -euo pipefail
@@ -686,10 +697,14 @@ def run(args, frame):
             )
         return launchpad_routing.parse_output(execute(script), build=target.build)
 
-    def check_resources(resources=None):
+    def check_resources(resources=None, *, previous=False):
         output = execute(
             registration_script(
-                identity, target, verify_resources=True, resources=resources
+                identity,
+                target,
+                verify_resources=True,
+                resources=resources,
+                previous=previous,
             )
         )
         if output.splitlines().count("LAUNCHPAD_RESOURCES_VERIFIED") != 1:
@@ -741,7 +756,7 @@ def run(args, frame):
         if args.operation in {"install", "update"}:
             if args.operation == "update":
                 require_owned_home(before)
-                check_resources(previous_resources)
+                check_resources(previous_resources, previous=True)
             else:
                 output = execute(registration_script(identity, target))
                 if (

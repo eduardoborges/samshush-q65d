@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://economia.awesomeapi.com.br https://marine-api.open-meteo.com https://api.open-meteo.com https://g1.globo.com; object-src 'none'; base-uri 'none'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://s2-g1.glbimg.com; connect-src 'self' https://economia.awesomeapi.com.br https://marine-api.open-meteo.com https://api.open-meteo.com https://falkor-cda.bastian.globo.com; object-src 'none'; base-uri 'none'">
     <title>Home — preview</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="styles.css">
@@ -77,9 +77,22 @@
               </div>
             </section>
           </div>
-          <section class="news" id="news" aria-label="Últimas do g1" hidden>
-            <p class="widget-label">Últimas do g1</p>
-            <nav class="tiles news-tiles" id="news-list" aria-label="Últimas do g1"></nav>
+          <section class="news" id="news" aria-label="Destaques do g1" hidden>
+            <p class="widget-label">Destaques do g1</p>
+            <div class="tiles news-slider glass">
+              <button class="tile news-slide" id="news-slide" data-id="news" tabindex="-1" aria-label="Destaques do g1">
+                <span class="news-track" id="news-track"></span>
+              </button>
+            </div>
+            <nav class="tiles news-controls" data-start="1" aria-label="Trocar destaque">
+              <button class="tile news-step" data-id="news-previous" tabindex="-1" aria-label="Notícia anterior">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5L8 12L15 19"></path></svg>
+              </button>
+              <span class="news-dots" id="news-dots" aria-hidden="true"></span>
+              <button class="tile news-step" data-id="news-next" tabindex="-1" aria-label="Próxima notícia">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5L16 12L9 19"></path></svg>
+              </button>
+            </nav>
           </section>
         </div>
       </header>
