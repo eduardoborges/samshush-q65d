@@ -154,36 +154,9 @@ p, h1, h2 { margin: 0; }
   letter-spacing: .02em;
 }
 
-/* Fixed top sheen, as on a tvOS icon under light. */
-.icon::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(255, 255, 255, .16), rgba(255, 255, 255, 0) 45%);
-  opacity: 0;
-  transition: opacity 260ms ease;
-  pointer-events: none;
-}
-
-.glare {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(115deg, rgba(255, 255, 255, 0) 32%, rgba(255, 255, 255, .32) 50%, rgba(255, 255, 255, 0) 68%);
-  transform: translateX(-130%);
-  pointer-events: none;
-}
-
 .tile.selected .icon {
-  transform: translateY(-.45vw) scale(1.12);
+  transform: scale(1.12);
   box-shadow: 0 1.8vw 3.4vw rgba(0, 0, 0, .55), 0 0 0 .12vw rgba(255, 255, 255, .35);
-}
-
-.tile.selected .icon::after { opacity: 1; }
-.tile.selected .glare { animation: glare 900ms cubic-bezier(.2, .8, .2, 1) 120ms both; }
-
-@keyframes glare {
-  from { transform: translateX(-130%); }
-  to { transform: translateX(130%); }
 }
 
 .tile.pending .icon { opacity: .6; }
