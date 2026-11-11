@@ -6,6 +6,7 @@
     "stremio": { id: "stremio", type: "app" },
     "spotify": { id: "spotify", type: "app" },
     "settings": { id: "settings", type: "settings" },
+    "tv": { id: "tv", type: "source" },
     "hdmi-2": { id: "hdmi-2", type: "source", port: 2 },
     "hdmi-1": { id: "hdmi-1", type: "source", port: 1 }
   };

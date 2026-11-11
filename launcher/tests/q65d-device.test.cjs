@@ -184,7 +184,7 @@ test("an input the TV does not confirm or list is reported without opening the v
   const wrong = other.device.activate({ id: "hdmi-2", type: "source", port: 2 });
   other.latest("getPropertyValue").success({ connected: [{ type: "HDMI", number: 2 }], disconnected: [] });
   other.latest("setSource").success();
-  await assert.rejects(wrong, /não confirmou a HDMI 2/);
+  await assert.rejects(wrong, /não confirmou a entrada HDMI 2/);
   for (const h of [missing, other]) assert.equal(h.latest("launch"), undefined);
 
   const unsupported = createDevice({ noSources: true });
@@ -192,4 +192,23 @@ test("an input the TV does not confirm or list is reported without opening the v
     unsupported.device.activate({ id: "hdmi-2", type: "source", port: 2 }),
     /não permite trocar de entrada/
   );
+});
+
+test("TV ao vivo selects the antenna source by type and opens the viewer", async () => {
+  const h = createDevice();
+  const antenna = { type: "TV", number: 0, vendorField: "kept" };
+  h.select(antenna);
+  const result = h.device.activate({ id: "tv", type: "source" });
+  h.latest("getPropertyValue").success({ connected: [antenna], disconnected: [{ type: "HDMI", number: 1 }] });
+  assert.equal(h.latest("setSource").descriptor, antenna);
+  h.latest("setSource").success();
+  h.latest("launch").success();
+  await result;
+  assert.equal(h.latest("launch").id, "org.tizen.tv-viewer");
+
+  const none = createDevice();
+  const missing = none.device.activate({ id: "tv", type: "source" });
+  none.latest("getPropertyValue").success({ connected: [{ type: "HDMI", number: 2 }], disconnected: [] });
+  await assert.rejects(missing, /TV ao vivo não está disponível/);
+  await assert.rejects(none.device.activate({ id: "tv", type: "source", port: 1 }), /não está disponível/);
 });

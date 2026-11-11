@@ -1,4 +1,4 @@
-/* Q65D layout: public Tizen app launches and HDMI input selection. */
+/* Q65D layout: public Tizen app launches and input selection (antenna TV and HDMI). */
 (function () {
   "use strict";
 
@@ -13,7 +13,11 @@
     stremio: "IkWsFHtOY9.Stremio",
     spotify: "rJeHak5zRg.Spotify"
   };
-  var sources = { "hdmi-1": 1, "hdmi-2": 2 };
+  var sources = {
+    "tv": { type: "TV", name: "TV ao vivo" },
+    "hdmi-2": { type: "HDMI", number: 2, name: "HDMI 2" },
+    "hdmi-1": { type: "HDMI", number: 1, name: "HDMI 1" }
+  };
 
   function failure(error, message) {
     var detail = error && error.name;
@@ -58,7 +62,12 @@
   }
 
   // Same contract as the Frame launcher: pass the TV's own descriptor, confirm it, then show the viewer.
-  function selectSource(port, finish, active) {
+  function sameSource(source, target) {
+    return Boolean(source) && source.type === target.type &&
+      (target.number === undefined || source.number === target.number);
+  }
+
+  function selectSource(target, finish, active) {
     if (!native.systeminfo || !native.tvwindow) {
       finish(new Error("Esta TV não permite trocar de entrada por aqui."));
       return;
@@ -70,30 +79,30 @@
           throw new Error("Invalid source inventory");
         }
         var matches = video.connected.concat(video.disconnected).filter(function (source) {
-          return source && source.type === "HDMI" && source.number === port;
+          return sameSource(source, target);
         });
         if (matches.length !== 1) {
-          finish(new Error("HDMI " + port + " não está disponível. Confira o cabo."));
+          finish(new Error(target.name + " não está disponível nesta TV."));
           return;
         }
         native.tvwindow.setSource(matches[0], function () {
           if (!active()) return;
           try {
             var selected = native.tvwindow.getSource();
-            if (!selected || selected.type !== "HDMI" || selected.number !== port) {
-              finish(new Error("A TV não confirmou a HDMI " + port + "."));
+            if (!sameSource(selected, matches[0])) {
+              finish(new Error("A TV não confirmou a entrada " + target.name + "."));
               return;
             }
             native.application.launch("org.tizen.tv-viewer", function () { finish(); }, function (error) {
-              finish(failure(error, "A HDMI " + port + " foi selecionada, mas a TV não abriu a imagem."));
+              finish(failure(error, target.name + " foi selecionada, mas a TV não abriu a imagem."));
             });
           } catch (error) { finish(failure(error, "A troca de entrada não foi confirmada.")); }
         }, function (error) {
           if (active()) finish(failure(error, "A TV não conseguiu trocar de entrada."));
         });
-      } catch (error) { finish(failure(error, "A TV não conseguiu ler as entradas HDMI.")); }
+      } catch (error) { finish(failure(error, "A TV não conseguiu ler as entradas.")); }
     }, function (error) {
-      if (active()) finish(failure(error, "A TV não conseguiu ler as entradas HDMI."));
+      if (active()) finish(failure(error, "A TV não conseguiu ler as entradas."));
     });
   }
 
@@ -101,14 +110,14 @@
     if (!action || !(
       (action.type === "app" && Object.prototype.hasOwnProperty.call(apps, action.id)) ||
       (action.type === "source" && Object.prototype.hasOwnProperty.call(sources, action.id) &&
-        action.port === sources[action.id]) ||
+        action.port === sources[action.id].number) ||
       (action.id === "settings" && action.type === "settings")
     )) return Promise.reject(new Error("Este atalho não está disponível."));
     return run(function (finish, active) {
       if (action.type === "app") {
         launchApp(apps[action.id], finish);
       } else if (action.type === "source") {
-        selectSource(action.port, finish, active);
+        selectSource(sources[action.id], finish, active);
       } else {
         launchControl("org.tizen.menu", {
           Entry: "s/setting",
