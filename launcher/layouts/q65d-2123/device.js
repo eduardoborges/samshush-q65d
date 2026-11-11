@@ -11,6 +11,8 @@
   var apps = {
     youtube: "9Ur5IzDKqV.TizenYouTube",
     stremio: "IkWsFHtOY9.Stremio",
+    primevideo: "org.tizen.primevideo",
+    tvplus: "HEPsqFNie0.tvplusstandalone",
     spotify: "rJeHak5zRg.Spotify"
   };
   var browser = "org.tizen.browser";

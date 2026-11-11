@@ -68,6 +68,8 @@ test("app shortcuts launch the IDs read from the Q65D", async t => {
   for (const [id, app] of [
     ["youtube", "9Ur5IzDKqV.TizenYouTube"],
     ["stremio", "IkWsFHtOY9.Stremio"],
+    ["primevideo", "org.tizen.primevideo"],
+    ["tvplus", "HEPsqFNie0.tvplusstandalone"],
     ["spotify", "rJeHak5zRg.Spotify"]
   ]) {
     await t.test(id, async () => {

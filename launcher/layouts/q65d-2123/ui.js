@@ -4,6 +4,8 @@
   var actions = {
     "youtube": { id: "youtube", type: "app" },
     "stremio": { id: "stremio", type: "app" },
+    "primevideo": { id: "primevideo", type: "app" },
+    "tvplus": { id: "tvplus", type: "app" },
     "spotify": { id: "spotify", type: "app" },
     "settings": { id: "settings", type: "settings" },
     "tv": { id: "tv", type: "source" },
