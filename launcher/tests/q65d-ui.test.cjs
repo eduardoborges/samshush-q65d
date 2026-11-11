@@ -4,10 +4,9 @@ const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 
-const source = fs.readFileSync(
-  path.join(__dirname, "..", "layouts", "q65d-2123", "ui.js"),
-  "utf8"
-);
+const layout = path.join(__dirname, "..", "layouts", "q65d-2123");
+const source = fs.readFileSync(path.join(layout, "ui.js"), "utf8");
+const page = fs.readFileSync(path.join(layout, "index.html"), "utf8");
 
 // Just enough DOM for ui.js: elements with classes, attributes, parents and focus.
 class Node {
@@ -65,7 +64,7 @@ function tile(document, id, label, url) {
 
 // The page's rows: the headline and its buttons in the header, hidden until the feed loads, then
 // the shelves.
-function createUI() {
+function createUI(shelf = ["youtube", "stremio", "spotify"]) {
   const listeners = {};
   const document = {
     hidden: false,
@@ -84,8 +83,8 @@ function createUI() {
     tile(document, "news-previous", "Notícia anterior"), tile(document, "news-next", "Próxima notícia"));
   controls.dataset.start = "1";
   news.append(slider, controls);
-  const apps = new Node(document, ["tiles"]).append(
-    tile(document, "youtube", "YouTube"), tile(document, "stremio", "Stremio"), tile(document, "spotify", "Spotify"));
+  const names = { youtube: "YouTube", stremio: "Stremio", spotify: "Spotify" };
+  const apps = new Node(document, ["tiles"]).append(...shelf.map(id => tile(document, id, names[id] || id)));
   const inputs = new Node(document, ["tiles"]).append(tile(document, "tv", "TV ao vivo"));
   body.append(news, apps, inputs);
   document.body = body;
@@ -190,6 +189,19 @@ test("app tiles still map to their fixed actions", async () => {
   await settle();
   assert.deepEqual(plain(h.actions), [{ id: "tv", type: "source" }]);
   assert.deepEqual(plain(h.ui.getSelection()), { id: "tv", type: "source" });
+});
+
+test("every app and input tile in the page has an action", () => {
+  const ids = [...page.matchAll(/class="tile[^"]*" data-id="([^"]+)"/g)].map(match => match[1])
+    .filter(id => !id.startsWith("news"));
+  assert.ok(ids.includes("primevideo") && ids.includes("hdmi-1"));
+  const h = createUI(ids);
+  for (const id of ids) {
+    assert.ok(h.ui.select(id), id);
+    const action = h.ui.getSelection();
+    assert.equal(action.id, id);
+    assert.equal(typeof action.type, "string", id);
+  }
 });
 
 test("after ten minutes without a key the backdrop rests, and the next key only wakes it", async () => {

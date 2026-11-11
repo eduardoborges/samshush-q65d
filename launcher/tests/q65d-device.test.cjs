@@ -132,9 +132,11 @@ test("unknown, inherited and Frame-only actions are refused without native calls
     { id: "hdmi-3", type: "source", port: 3 },
     { id: "art-mode", type: "art" }
   ]) {
-    await assert.rejects(h.device.activate(action), /não está disponível/);
+    const result = h.device.activate(action);
+    // Checked before the await, because an accepted action would wait forever for the fake TV.
+    assert.equal(h.calls.length, 0, JSON.stringify(action));
+    await assert.rejects(result, /não está disponível/);
   }
-  assert.equal(h.calls.length, 0);
 });
 
 test("a second action waits for the first and a silent TV times out", async () => {
