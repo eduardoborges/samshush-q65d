@@ -56,15 +56,20 @@ p, h1, h2 { margin: 0; }
   font-variant-numeric: tabular-nums;
 }
 
-/* Each card on the right is as wide as its content; they line up on the right edge only. */
+/* Each card on the right is as wide as its content; they line up on the right edge only. The moon
+   card shares a row with the forecast, so the column does not grow taller. */
 .side { display: flex; flex-direction: column; align-items: flex-end; gap: .9vw; }
 
-.sea, .forecast {
+.side-row { display: flex; gap: .9vw; }
+
+.sea, .moon, .forecast {
   padding: .9vw 1.2vw;
   border-radius: .975vw;
 }
 
-.sea[hidden], .sea-air[hidden], .forecast[hidden], .info[hidden], .news[hidden] { display: none; }
+.sea[hidden], .sea-air[hidden], .moon[hidden], .forecast[hidden], .info[hidden], .news[hidden] {
+  display: none;
+}
 
 .widget-value {
   margin-top: .225vw;
@@ -82,7 +87,7 @@ p, h1, h2 { margin: 0; }
   font-variant-numeric: tabular-nums;
 }
 
-.sea, .forecast { display: flex; gap: 1.5vw; }
+.sea, .moon, .forecast { display: flex; gap: 1.5vw; }
 
 .widget-value .low { color: rgba(235, 235, 245, .6); }
 
@@ -121,8 +126,6 @@ p, h1, h2 { margin: 0; }
 .market-change.up { color: #30d158; }
 .market-change.down { color: #ff453a; }
 .market-time { color: rgba(235, 235, 245, .6); }
-
-.moon-phase { margin-top: .3vw; font-size: .975vw; }
 
 .shelves { display: flex; flex-direction: column; gap: 1.05vw; }
 

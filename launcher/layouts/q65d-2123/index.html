@@ -27,11 +27,6 @@
             <p class="widget-label">Mercado</p>
             <ol class="info-list market-list" id="market-list"></ol>
           </section>
-          <section class="info" id="moon" aria-label="Fase da lua" hidden>
-            <p class="widget-label">Lua</p>
-            <p class="moon-phase" id="moon-phase"></p>
-            <p class="widget-detail" id="moon-next"></p>
-          </section>
         </div>
         <div class="side">
           <section class="sea glass" id="sea" aria-label="Mar em Fortaleza" hidden>
@@ -51,23 +46,37 @@
               <p class="widget-detail" id="sea-weather"></p>
             </div>
           </section>
-          <section class="forecast glass" id="forecast" aria-label="Previsão do tempo em Fortaleza" hidden>
-            <div>
-              <p class="widget-label">Agora</p>
-              <p class="widget-value" id="forecast-now"></p>
-              <p class="widget-detail" id="forecast-now-detail"></p>
-            </div>
-            <div>
-              <p class="widget-label">Hoje · <span id="forecast-0-date"></span></p>
-              <p class="widget-value"><span id="forecast-0-high"></span> <span class="low" id="forecast-0-low"></span></p>
-              <p class="widget-detail" id="forecast-0-detail"></p>
-            </div>
-            <div>
-              <p class="widget-label">Amanhã · <span id="forecast-1-date"></span></p>
-              <p class="widget-value"><span id="forecast-1-high"></span> <span class="low" id="forecast-1-low"></span></p>
-              <p class="widget-detail" id="forecast-1-detail"></p>
-            </div>
-          </section>
+          <div class="side-row">
+            <section class="moon glass" id="moon" aria-label="Lua e maré grande" hidden>
+              <div>
+                <p class="widget-label">Lua</p>
+                <p class="widget-value" id="moon-name"></p>
+                <p class="widget-detail" id="moon-light"></p>
+              </div>
+              <div>
+                <p class="widget-label">Maré grande</p>
+                <p class="widget-value" id="moon-tide"></p>
+                <p class="widget-detail" id="moon-tide-detail"></p>
+              </div>
+            </section>
+            <section class="forecast glass" id="forecast" aria-label="Previsão do tempo em Fortaleza" hidden>
+              <div>
+                <p class="widget-label">Agora</p>
+                <p class="widget-value" id="forecast-now"></p>
+                <p class="widget-detail" id="forecast-now-detail"></p>
+              </div>
+              <div>
+                <p class="widget-label">Hoje · <span id="forecast-0-date"></span></p>
+                <p class="widget-value"><span id="forecast-0-high"></span> <span class="low" id="forecast-0-low"></span></p>
+                <p class="widget-detail" id="forecast-0-detail"></p>
+              </div>
+              <div>
+                <p class="widget-label">Amanhã · <span id="forecast-1-date"></span></p>
+                <p class="widget-value"><span id="forecast-1-high"></span> <span class="low" id="forecast-1-low"></span></p>
+                <p class="widget-detail" id="forecast-1-detail"></p>
+              </div>
+            </section>
+          </div>
           <section class="news" id="news" aria-label="Últimas do g1" hidden>
             <p class="widget-label">Últimas do g1</p>
             <nav class="tiles news-tiles" id="news-list" aria-label="Últimas do g1"></nav>

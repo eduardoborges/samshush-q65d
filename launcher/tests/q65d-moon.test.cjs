@@ -12,7 +12,9 @@ const NOW = new Date(2026, 10, 11, 9, 30).getTime();
 
 function createMoon(now = NOW, withElements = true) {
   const elements = {};
-  for (const id of ["moon", "moon-phase", "moon-next"]) elements[id] = { id, hidden: id === "moon", textContent: "" };
+  for (const id of ["moon", "moon-name", "moon-light", "moon-tide", "moon-tide-detail"]) {
+    elements[id] = { id, hidden: id === "moon", textContent: "" };
+  }
   const timers = new Map();
   let timerID = 0;
   const document = {
@@ -51,21 +53,22 @@ test("new and full moon times land within five minutes of published ones", () =>
 
 test("names the phase, its light and the next spring tide", () => {
   const { moon } = createMoon(NOW, false);
-  const at = (...args) => moon.describe(new Date(...args).getTime());
-  assert.deepEqual(JSON.parse(JSON.stringify(at(2026, 10, 11, 9, 30))),
-    { phase: "Crescente · 5% iluminada", next: "Lua cheia e maré grande em 24/11" });
-  assert.deepEqual(JSON.parse(JSON.stringify(at(2026, 10, 24, 12, 0))),
-    { phase: "Lua cheia · 100% iluminada", next: "Maré grande nestes dias" });
-  assert.deepEqual(JSON.parse(JSON.stringify(at(2026, 10, 30, 12, 0))),
-    { phase: "Minguante · 60% iluminada", next: "Lua nova e maré grande em 08/12" });
-  assert.equal(at(2026, 10, 9, 10, 0).phase, "Lua nova · 0% iluminada");
+  const at = (...args) => JSON.parse(JSON.stringify(moon.describe(new Date(...args).getTime())));
+  assert.deepEqual(at(2026, 10, 11, 9, 30),
+    { name: "Crescente", light: "5% iluminada", tide: "24/11", tideDetail: "lua cheia" });
+  assert.deepEqual(at(2026, 10, 24, 12, 0),
+    { name: "Lua cheia", light: "100% iluminada", tide: "Agora", tideDetail: "lua cheia" });
+  assert.deepEqual(at(2026, 10, 30, 12, 0),
+    { name: "Minguante", light: "60% iluminada", tide: "08/12", tideDetail: "lua nova" });
+  assert.deepEqual(at(2026, 10, 9, 10, 0),
+    { name: "Lua nova", light: "0% iluminada", tide: "Agora", tideDetail: "lua nova" });
 });
 
 test("shows the card, rechecks every hour and stop cancels it", () => {
   const h = createMoon();
   assert.equal(h.elements.moon.hidden, false);
-  assert.equal(h.elements["moon-phase"].textContent, "Crescente · 5% iluminada");
-  assert.equal(h.elements["moon-next"].textContent, "Lua cheia e maré grande em 24/11");
+  assert.deepEqual(["moon-name", "moon-light", "moon-tide", "moon-tide-detail"].map(id => h.elements[id].textContent),
+    ["Crescente", "5% iluminada", "24/11", "lua cheia"]);
   assert.deepEqual([...h.timers.values()].map(timer => timer.delay), [60 * 60 * 1000]);
   h.moon.stop();
   assert.equal(h.timers.size, 0);

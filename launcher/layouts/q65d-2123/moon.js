@@ -10,8 +10,9 @@
   var springWindow = 1.5 * day;
   var refreshDelay = 60 * 60 * 1000;
   var container = document.getElementById("moon");
-  var phase = document.getElementById("moon-phase");
-  var next = document.getElementById("moon-next");
+  var fields = ["moon-name", "moon-light", "moon-tide", "moon-tide-detail"].map(function (id) {
+    return document.getElementById(id);
+  });
   var timer = null;
   var stopped = false;
 
@@ -71,19 +72,21 @@
     var lit = Math.round((1 - Math.cos(2 * Math.PI * age)) / 2 * 100);
     var name = near && Math.abs(near.time - now) <= day / 2 ? (near.full ? "Lua cheia" : "Lua nova")
       : age < 0.5 ? "Crescente" : "Minguante";
+    var tide = near || upcoming;
     return {
-      phase: name + " · " + lit + "% iluminada",
-      next: near
-        ? "Maré grande nestes dias"
-        : (upcoming.full ? "Lua cheia" : "Lua nova") + " e maré grande em " + date(upcoming.time)
+      name: name,
+      light: lit + "% iluminada",
+      tide: near ? "Agora" : date(upcoming.time),
+      tideDetail: tide.full ? "lua cheia" : "lua nova"
     };
   }
 
   function render() {
     if (stopped) return;
     var text = describe(Date.now());
-    phase.textContent = text.phase;
-    next.textContent = text.next;
+    [text.name, text.light, text.tide, text.tideDetail].forEach(function (value, index) {
+      fields[index].textContent = value;
+    });
     container.hidden = false;
     window.clearTimeout(timer);
     if (!document.hidden) timer = window.setTimeout(render, refreshDelay);
@@ -101,7 +104,7 @@
   }
 
   window.LauncherMoon = { phaseTime: phaseTime, describe: describe, stop: stop };
-  if (!container || !phase || !next) return;
+  if (!container || fields.some(function (field) { return !field; })) return;
   document.addEventListener("visibilitychange", visibilityChanged);
   render();
 }());
