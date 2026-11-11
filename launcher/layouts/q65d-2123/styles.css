@@ -178,7 +178,6 @@ p, h1, h2 { margin: 0; }
 .icon-primevideo { background: linear-gradient(160deg, #1b3550, #0a1622); }
 .icon-tvplus { background: linear-gradient(160deg, #2350d8, #0b1d5c); }
 .icon-spotify { background: linear-gradient(160deg, #2a2a2a, #0a0a0a); }
-.icon-settings { background: linear-gradient(160deg, #75757b, #3a3a3e); }
 
 .icon-input {
   display: flex;
@@ -203,6 +202,24 @@ p, h1, h2 { margin: 0; }
 }
 
 .tile.pending .icon { opacity: .6; }
+
+/* Settings is a small round button in the bottom right corner rather than an app tile. It ends the
+   inputs row, so Right from the last input reaches it. */
+.settings-button {
+  flex: none;
+  justify-content: center;
+  align-self: flex-end;
+  margin-left: auto;
+  width: 2.6vw;
+  height: 2.6vw;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .08);
+}
+
+.settings-button svg { width: 1.4vw; height: 1.4vw; fill: #f5f5f7; }
+
+.settings-button.selected { background: #f5f5f7; }
+.settings-button.selected svg { fill: #111114; }
 
 /* Headlines: one slide at a time, with the previous and next buttons underneath. The track slides
    on the compositor, and going from the last slide back to the first skips the transition. */
