@@ -13,56 +13,103 @@
     <script src="quote.js" defer></script>
   </head>
   <body>
+    <div class="backdrop" aria-hidden="true"></div>
     <main class="home" aria-label="Início">
       <header class="top">
         <div class="now">
           <p class="date" id="date"></p>
           <time class="clock" id="clock" aria-label="Hora atual"></time>
         </div>
-        <section class="quote" id="quote" aria-label="Cotação do dólar" hidden>
+        <section class="quote glass" id="quote" aria-label="Cotação do dólar" hidden>
           <p class="quote-label">Dólar</p>
           <p class="quote-price" id="quote-price"></p>
           <p class="quote-detail"><span class="quote-change" id="quote-change"></span> <span id="quote-time"></span></p>
         </section>
       </header>
 
-      <section class="launcher" aria-labelledby="selection-title">
-        <h1 class="visually-hidden" id="selection-title">YouTube</h1>
-        <nav class="tiles" aria-label="Apps">
-          <button class="tile selected" data-id="youtube" tabindex="0" aria-label="YouTube">
-            <span class="icon icon-youtube">
-              <svg viewBox="0 0 100 60" aria-hidden="true">
-                <rect x="32" y="17" width="36" height="26" rx="8" fill="#ff0033"></rect>
-                <path d="M46 24L58 30L46 36Z" fill="#ffffff"></path>
-              </svg>
-            </span>
-            <span class="tile-label">YouTube</span>
-          </button>
+      <h1 class="visually-hidden" id="selection-title">YouTube</h1>
+      <div class="shelves">
+        <section class="shelf" aria-labelledby="apps-title">
+          <h2 class="shelf-title" id="apps-title">Apps</h2>
+          <nav class="tiles" aria-labelledby="apps-title">
+            <button class="tile selected" data-id="youtube" tabindex="0" aria-label="YouTube">
+              <span class="icon icon-youtube">
+                <svg viewBox="0 0 100 56" aria-hidden="true">
+                  <rect x="33" y="15" width="34" height="26" rx="8" fill="#ff0033"></rect>
+                  <path d="M46 22L57 28L46 34Z" fill="#ffffff"></path>
+                </svg>
+                <span class="glare"></span>
+              </span>
+              <span class="tile-label">YouTube</span>
+            </button>
 
-          <button class="tile" data-id="stremio" tabindex="-1" aria-label="Stremio">
-            <span class="icon icon-stremio">
-              <svg viewBox="0 0 100 60" aria-hidden="true">
-                <rect x="37" y="17" width="26" height="26" rx="5" transform="rotate(45 50 30)" fill="#7b5bf5"></rect>
-                <path d="M46 24.5L56 30L46 35.5Z" fill="#ffffff"></path>
-              </svg>
-            </span>
-            <span class="tile-label">Stremio</span>
-          </button>
+            <button class="tile" data-id="stremio" tabindex="-1" aria-label="Stremio">
+              <span class="icon icon-stremio">
+                <svg viewBox="0 0 100 56" aria-hidden="true">
+                  <rect x="37.5" y="15.5" width="25" height="25" rx="5" transform="rotate(45 50 28)" fill="#7b5bf5"></rect>
+                  <path d="M46.5 22.8L55.5 28L46.5 33.2Z" fill="#ffffff"></path>
+                </svg>
+                <span class="glare"></span>
+              </span>
+              <span class="tile-label">Stremio</span>
+            </button>
 
-          <button class="tile" data-id="settings" tabindex="-1" aria-label="Ajustes">
-            <span class="icon icon-settings">
-              <svg viewBox="0 0 100 60" aria-hidden="true">
-                <g transform="translate(50 30) scale(.42)">
-                  <path d="M-9-39H9L12-29L19-25L30-28L39-12L31-5V5L39 12L30 28L19 25L12 29L9 39H-9L-12 29L-19 25L-30 28L-39 12L-31 5V-5L-39-12L-30-28L-19-25L-12-29Z" fill="#d1d1d6"></path>
-                  <circle r="16" fill="#48484a"></circle>
-                </g>
-              </svg>
-            </span>
-            <span class="tile-label">Ajustes</span>
-          </button>
-        </nav>
-      </section>
-      <p class="action-error" id="action-error" role="alert" hidden></p>
+            <button class="tile" data-id="spotify" tabindex="-1" aria-label="Spotify">
+              <span class="icon icon-spotify">
+                <svg viewBox="0 0 100 56" aria-hidden="true">
+                  <circle cx="50" cy="28" r="14" fill="#1ed760"></circle>
+                  <path d="M41.2 23.6Q50 20.6 59.2 24.6M42.2 28.2Q50 25.9 57.6 29.2M43.2 32.5Q50 30.8 56 33.5" fill="none" stroke="#121212" stroke-width="2.6" stroke-linecap="round"></path>
+                </svg>
+                <span class="glare"></span>
+              </span>
+              <span class="tile-label">Spotify</span>
+            </button>
+
+            <button class="tile" data-id="settings" tabindex="-1" aria-label="Ajustes">
+              <span class="icon icon-settings">
+                <svg viewBox="0 0 100 56" aria-hidden="true">
+                  <g transform="translate(50 28) scale(.4)">
+                    <path d="M-9-39H9L12-29L19-25L30-28L39-12L31-5V5L39 12L30 28L19 25L12 29L9 39H-9L-12 29L-19 25L-30 28L-39 12L-31 5V-5L-39-12L-30-28L-19-25L-12-29Z" fill="#e5e5ea"></path>
+                    <circle r="16" fill="#58585d"></circle>
+                  </g>
+                </svg>
+                <span class="glare"></span>
+              </span>
+              <span class="tile-label">Ajustes</span>
+            </button>
+          </nav>
+        </section>
+
+        <section class="shelf" aria-labelledby="inputs-title">
+          <h2 class="shelf-title" id="inputs-title">Entradas</h2>
+          <nav class="tiles" aria-labelledby="inputs-title">
+            <button class="tile" data-id="hdmi-2" tabindex="-1" aria-label="HDMI 2">
+              <span class="icon icon-input glass">
+                <svg viewBox="26 16 48 24" aria-hidden="true">
+                  <path d="M38 21H62V29L57.5 34H42.5L38 29Z" fill="none" stroke="#f5f5f7" stroke-width="2" stroke-linejoin="round"></path>
+                  <path d="M44 25.5V29M48 25.5V29M52 25.5V29M56 25.5V29" stroke="#f5f5f7" stroke-width="1.6" stroke-linecap="round"></path>
+                </svg>
+                <span class="input-name">HDMI 2</span>
+                <span class="glare"></span>
+              </span>
+              <span class="tile-label">HDMI 2</span>
+            </button>
+
+            <button class="tile" data-id="hdmi-1" tabindex="-1" aria-label="HDMI 1">
+              <span class="icon icon-input glass">
+                <svg viewBox="26 16 48 24" aria-hidden="true">
+                  <path d="M38 21H62V29L57.5 34H42.5L38 29Z" fill="none" stroke="#f5f5f7" stroke-width="2" stroke-linejoin="round"></path>
+                  <path d="M44 25.5V29M48 25.5V29M52 25.5V29M56 25.5V29" stroke="#f5f5f7" stroke-width="1.6" stroke-linecap="round"></path>
+                </svg>
+                <span class="input-name">HDMI 1</span>
+                <span class="glare"></span>
+              </span>
+              <span class="tile-label">HDMI 1</span>
+            </button>
+          </nav>
+        </section>
+      </div>
+      <p class="action-error glass" id="action-error" role="alert" hidden></p>
     </main>
   </body>
 </html>

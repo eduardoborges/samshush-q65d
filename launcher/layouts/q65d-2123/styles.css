@@ -1,71 +1,108 @@
-/* Q65D layout: flat black screen; focus changes are instant, with no transitions or animations. */
-*, *::before, *::after {
-  box-sizing: border-box;
-  animation: none !important;
-  transition: none !important;
-}
+/* Q65D layout: dark gradient backdrop, frosted glass and tvOS-style focus motion. */
+*, *::before, *::after { box-sizing: border-box; }
 
 html, body { margin: 0; height: 100%; }
 
 body {
-  background: #000;
+  background: #030306;
   color: #f5f5f7;
   font-family: "SamsungOneUI", "TizenSans", "Helvetica Neue", Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }
 
-p { margin: 0; }
+p, h1, h2 { margin: 0; }
+
+/* Oversized so the slow drift never shows an edge; transform keeps it on the compositor. */
+.backdrop {
+  position: fixed;
+  inset: -12%;
+  background:
+    radial-gradient(48vw 36vw at 18% 12%, rgba(72, 84, 200, .42), transparent 70%),
+    radial-gradient(42vw 32vw at 88% 22%, rgba(24, 150, 170, .26), transparent 72%),
+    radial-gradient(60vw 40vw at 62% 105%, rgba(128, 48, 160, .30), transparent 70%),
+    linear-gradient(180deg, #0b0d18 0%, #030306 75%);
+  animation: drift 48s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+@keyframes drift {
+  from { transform: translate3d(-2%, -1%, 0) scale(1); }
+  to { transform: translate3d(2%, 1.5%, 0) scale(1.06); }
+}
 
 .home {
   position: relative;
   height: 100vh;
-  padding: 5.2vw 5.8vw 6.4vw;
+  padding: 4.6vw 5.8vw 3.4vw;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  animation: appear 520ms cubic-bezier(.2, .8, .2, 1) both;
+}
+
+@keyframes appear {
+  from { opacity: 0; transform: scale(1.015); }
+  to { opacity: 1; transform: none; }
+}
+
+.glass {
+  background: linear-gradient(160deg, rgba(255, 255, 255, .13), rgba(255, 255, 255, .05));
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+  backdrop-filter: blur(28px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, .10);
 }
 
 .top { display: flex; justify-content: space-between; align-items: flex-start; }
 
-.date, .quote-label {
-  font-size: 1.35vw;
+.date, .quote-label, .shelf-title {
+  font-size: 1.3vw;
   font-weight: 500;
-  color: #8e8e93;
+  color: rgba(235, 235, 245, .6);
 }
 
 .clock {
   display: block;
   margin-top: .3vw;
-  font-size: 7.2vw;
+  font-size: 7vw;
   font-weight: 200;
   line-height: 1;
   letter-spacing: -.035em;
   font-variant-numeric: tabular-nums;
 }
 
-.quote { text-align: right; }
+.quote {
+  min-width: 15vw;
+  padding: 1.2vw 1.6vw;
+  border-radius: 1.3vw;
+  text-align: right;
+}
+
 .quote[hidden] { display: none; }
 
 .quote-price {
-  margin-top: .4vw;
-  font-size: 3.4vw;
+  margin-top: .3vw;
+  font-size: 3vw;
   font-weight: 300;
   letter-spacing: -.02em;
   font-variant-numeric: tabular-nums;
 }
 
 .quote-detail {
-  margin-top: .5vw;
-  font-size: 1.1vw;
-  color: #8e8e93;
+  margin-top: .4vw;
+  font-size: 1.05vw;
+  color: rgba(235, 235, 245, .6);
   font-variant-numeric: tabular-nums;
 }
 
 .quote-change.up { color: #30d158; }
 .quote-change.down { color: #ff453a; }
 
-.tiles { display: flex; gap: 2.6vw; align-items: flex-start; }
+.shelves { display: flex; flex-direction: column; gap: 1.4vw; }
+
+.shelf-title { margin-bottom: 1.1vw; }
+
+.tiles { display: flex; gap: 2.2vw; align-items: flex-start; }
 
 .tile {
   appearance: none;
@@ -82,33 +119,88 @@ p { margin: 0; }
 }
 
 .icon {
+  position: relative;
   display: block;
-  width: 13.5vw;
-  height: 8.1vw;
-  border-radius: 1.1vw;
+  width: 12vw;
+  height: 6.75vw;
+  border-radius: 1vw;
   overflow: hidden;
+  box-shadow: 0 .5vw 1.2vw rgba(0, 0, 0, .35);
+  transition: transform 260ms cubic-bezier(.2, .8, .2, 1), box-shadow 260ms cubic-bezier(.2, .8, .2, 1);
+  will-change: transform;
 }
 
-.icon svg { display: block; width: 100%; height: 100%; }
-.icon-youtube { background: #ffffff; }
-.icon-stremio { background: #1c1838; }
-.icon-settings { background: #48484a; }
+.icon svg { position: relative; display: block; width: 100%; height: 100%; }
+
+.icon-youtube { background: linear-gradient(160deg, #ffffff, #e6e6eb); }
+.icon-stremio { background: linear-gradient(160deg, #31287c, #120f2e); }
+.icon-spotify { background: linear-gradient(160deg, #2a2a2a, #0a0a0a); }
+.icon-settings { background: linear-gradient(160deg, #75757b, #3a3a3e); }
+
+.icon-input {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: .5vw;
+}
+
+.icon-input svg { width: 4.4vw; height: 2.2vw; }
+
+.input-name {
+  position: relative;
+  font-size: 1.15vw;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+
+/* Fixed top sheen, as on a tvOS icon under light. */
+.icon::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .16), rgba(255, 255, 255, 0) 45%);
+  opacity: 0;
+  transition: opacity 260ms ease;
+  pointer-events: none;
+}
+
+.glare {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, rgba(255, 255, 255, 0) 32%, rgba(255, 255, 255, .32) 50%, rgba(255, 255, 255, 0) 68%);
+  transform: translateX(-130%);
+  pointer-events: none;
+}
 
 .tile.selected .icon {
-  transform: scale(1.1);
-  box-shadow: 0 0 0 .2vw rgba(255, 255, 255, .9);
+  transform: translateY(-.45vw) scale(1.12);
+  box-shadow: 0 1.8vw 3.4vw rgba(0, 0, 0, .55), 0 0 0 .12vw rgba(255, 255, 255, .35);
+}
+
+.tile.selected .icon::after { opacity: 1; }
+.tile.selected .glare { animation: glare 900ms cubic-bezier(.2, .8, .2, 1) 120ms both; }
+
+@keyframes glare {
+  from { transform: translateX(-130%); }
+  to { transform: translateX(130%); }
 }
 
 .tile.pending .icon { opacity: .6; }
 
 .tile-label {
-  margin-top: 1.7vw;
-  font-size: 1.25vw;
+  margin-top: 1.4vw;
+  font-size: 1.15vw;
   font-weight: 500;
-  visibility: hidden;
+  opacity: 0;
+  transform: translateY(-.3vw);
+  transition: opacity 200ms ease, transform 200ms ease;
 }
 
-.tile.selected .tile-label { visibility: visible; }
+.tile.selected .tile-label { opacity: 1; transform: none; }
+
+/* Input tiles already show the port name inside. */
+.icon-input + .tile-label { display: none; }
 
 .visually-hidden {
   position: absolute;
@@ -122,13 +214,16 @@ p { margin: 0; }
 .action-error {
   position: absolute;
   right: 5.8vw;
-  bottom: 6.4vw;
+  bottom: 3.4vw;
   max-width: 36vw;
   padding: .8vw 1.4vw;
-  border-radius: .8vw;
-  background: #1c1c1e;
+  border-radius: .9vw;
   color: #f5f5f7;
   font-size: 1.1vw;
 }
 
 .action-error[hidden] { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

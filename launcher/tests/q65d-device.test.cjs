@@ -13,6 +13,7 @@ function createDevice(options = {}) {
   const calls = [];
   const timers = new Map();
   let timerID = 0;
+  let selectedSource = { type: "HDMI", number: 2 };
   const native = {
     ApplicationControlData: function (key, value) {
       this.key = key;
@@ -27,6 +28,20 @@ function createDevice(options = {}) {
       },
       launchAppControl(control, id, success, error) {
         calls.push({ method: "launchAppControl", control, id, success, error });
+      }
+    },
+    systeminfo: options.noSources ? undefined : {
+      getPropertyValue(property, success, error) {
+        calls.push({ method: "getPropertyValue", property, success, error });
+      }
+    },
+    tvwindow: options.noSources ? undefined : {
+      setSource(descriptor, success, error) {
+        calls.push({ method: "setSource", descriptor, success, error });
+      },
+      getSource() {
+        calls.push({ method: "getSource" });
+        return selectedSource;
       }
     }
   };
@@ -44,14 +59,16 @@ function createDevice(options = {}) {
     device: window.LauncherDevice,
     calls,
     timers,
-    latest(method) { return calls.findLast(call => call.method === method); }
+    latest(method) { return calls.findLast(call => call.method === method); },
+    select(descriptor) { selectedSource = descriptor; }
   };
 }
 
 test("app shortcuts launch the IDs read from the Q65D", async t => {
   for (const [id, app] of [
     ["youtube", "9Ur5IzDKqV.TizenYouTube"],
-    ["stremio", "IkWsFHtOY9.Stremio"]
+    ["stremio", "IkWsFHtOY9.Stremio"],
+    ["spotify", "rJeHak5zRg.Spotify"]
   ]) {
     await t.test(id, async () => {
       const h = createDevice();
@@ -109,6 +126,8 @@ test("unknown, inherited and Frame-only actions are refused without native calls
     { id: "constructor", type: "app" },
     { id: "netflix", type: "app" },
     { id: "apple-tv", type: "source", port: 1 },
+    { id: "hdmi-2", type: "source", port: 1 },
+    { id: "hdmi-3", type: "source", port: 3 },
     { id: "art-mode", type: "art" }
   ]) {
     await assert.rejects(h.device.activate(action), /não está disponível/);
@@ -131,4 +150,46 @@ test("outside the TV the controls report that they are unavailable", async () =>
   const h = createDevice({ browser: true });
   assert.equal(h.device.available, false);
   await assert.rejects(h.device.activate({ id: "youtube", type: "app" }), /Abra este app na TV/);
+});
+
+test("inputs pass the TV's own HDMI descriptor, confirm it and open the viewer", async t => {
+  for (const [id, port, list] of [["hdmi-2", 2, "connected"], ["hdmi-1", 1, "disconnected"]]) {
+    await t.test(id, async () => {
+      const h = createDevice();
+      h.select({ type: "HDMI", number: port });
+      const descriptor = { type: "HDMI", number: port, vendorField: "kept" };
+      const result = h.device.activate({ id, type: "source", port });
+      const inventory = { connected: [], disconnected: [] };
+      inventory[list].push(descriptor);
+      assert.equal(h.latest("getPropertyValue").property, "VIDEOSOURCE");
+      h.latest("getPropertyValue").success(inventory);
+      assert.equal(h.latest("setSource").descriptor, descriptor);
+      h.latest("setSource").success();
+      const viewer = h.latest("launch");
+      assert.equal(viewer.id, "org.tizen.tv-viewer");
+      viewer.success();
+      await result;
+    });
+  }
+});
+
+test("an input the TV does not confirm or list is reported without opening the viewer", async () => {
+  const missing = createDevice();
+  const absent = missing.device.activate({ id: "hdmi-1", type: "source", port: 1 });
+  missing.latest("getPropertyValue").success({ connected: [], disconnected: [] });
+  await assert.rejects(absent, /HDMI 1 não está disponível/);
+
+  const other = createDevice();
+  other.select({ type: "HDMI", number: 1 });
+  const wrong = other.device.activate({ id: "hdmi-2", type: "source", port: 2 });
+  other.latest("getPropertyValue").success({ connected: [{ type: "HDMI", number: 2 }], disconnected: [] });
+  other.latest("setSource").success();
+  await assert.rejects(wrong, /não confirmou a HDMI 2/);
+  for (const h of [missing, other]) assert.equal(h.latest("launch"), undefined);
+
+  const unsupported = createDevice({ noSources: true });
+  await assert.rejects(
+    unsupported.device.activate({ id: "hdmi-2", type: "source", port: 2 }),
+    /não permite trocar de entrada/
+  );
 });

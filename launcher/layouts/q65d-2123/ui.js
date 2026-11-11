@@ -4,9 +4,17 @@
   var actions = {
     "youtube": { id: "youtube", type: "app" },
     "stremio": { id: "stremio", type: "app" },
-    "settings": { id: "settings", type: "settings" }
+    "spotify": { id: "spotify", type: "app" },
+    "settings": { id: "settings", type: "settings" },
+    "hdmi-2": { id: "hdmi-2", type: "source", port: 2 },
+    "hdmi-1": { id: "hdmi-1", type: "source", port: 1 }
   };
-  var tiles = Array.prototype.slice.call(document.querySelectorAll(".tile:not(:disabled)"));
+  // One row per shelf; Up and Down move between shelves and return to the column used last.
+  var rows = Array.prototype.slice.call(document.querySelectorAll(".tiles")).map(function (shelf) {
+    return Array.prototype.slice.call(shelf.querySelectorAll(".tile:not(:disabled)"));
+  }).filter(function (row) { return row.length > 0; });
+  var tiles = rows.reduce(function (all, row) { return all.concat(row); }, []);
+  var lastColumn = rows.map(function () { return 0; });
   var title = document.getElementById("selection-title");
   var error = document.getElementById("action-error");
   var clock = document.getElementById("clock");
@@ -16,12 +24,15 @@
   var months = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto",
     "setembro", "outubro", "novembro", "dezembro"];
   var adapter = window.LauncherDevice;
-  var selected = 0;
+  var current = { row: 0, column: 0 };
   var busy = false;
 
   function actionFor(tile) {
-    var action = actions[tile.dataset.id];
-    return Object.assign({}, action);
+    return Object.assign({}, actions[tile.dataset.id]);
+  }
+
+  function selectedTile() {
+    return rows[current.row][current.column];
   }
 
   function reportError(reason) {
@@ -35,19 +46,30 @@
     }
   }
 
-  function select(index, focus) {
-    if (index < 0 || index >= tiles.length) return false;
-    selected = index;
-    tiles.forEach(function (tile, position) {
-      tile.classList.toggle("selected", position === selected);
-      tile.tabIndex = position === selected ? 0 : -1;
+  function select(row, column, focus) {
+    if (row < 0 || row >= rows.length) return false;
+    column = Math.max(0, Math.min(rows[row].length - 1, column));
+    current = { row: row, column: column };
+    lastColumn[row] = column;
+    var chosen = selectedTile();
+    tiles.forEach(function (tile) {
+      tile.classList.toggle("selected", tile === chosen);
+      tile.tabIndex = tile === chosen ? 0 : -1;
     });
-    title.textContent = tiles[selected].querySelector(".tile-label").textContent;
+    title.textContent = chosen.querySelector(".tile-label").textContent;
     error.hidden = true;
     error.textContent = "";
-    if (focus) tiles[selected].focus();
-    notify("onSelection", actionFor(tiles[selected]));
+    if (focus) chosen.focus();
+    notify("onSelection", actionFor(chosen));
     return true;
+  }
+
+  function locate(tile) {
+    for (var row = 0; row < rows.length; row += 1) {
+      var column = rows[row].indexOf(tile);
+      if (column >= 0) return { row: row, column: column };
+    }
+    return null;
   }
 
   function perform(method, action) {
@@ -58,7 +80,7 @@
       return;
     }
     busy = true;
-    var tile = tiles[selected];
+    var tile = selectedTile();
     tile.classList.add("pending");
     tile.setAttribute("aria-busy", "true");
     Promise.resolve().then(function () {
@@ -76,7 +98,7 @@
   }
 
   function activate() {
-    perform("activate", actionFor(tiles[selected]));
+    perform("activate", actionFor(selectedTile()));
   }
 
   function updateClock() {
@@ -97,18 +119,22 @@
       document.title = adapter && adapter.available === true ? "Home" : "Home — preview";
     },
     select: function (id) {
-      return select(tiles.findIndex(function (tile) { return tile.dataset.id === id; }), true);
+      var place = locate(tiles.find(function (tile) { return tile.dataset.id === id; }));
+      return place ? select(place.row, place.column, true) : false;
     },
-    getSelection: function () { return actionFor(tiles[selected]); }
+    getSelection: function () { return actionFor(selectedTile()); }
   };
   window.LauncherUI = api;
 
-  tiles.forEach(function (tile, index) {
+  tiles.forEach(function (tile) {
     tile.addEventListener("focus", function () {
-      if (!tile.classList.contains("selected")) select(index, false);
+      var place = locate(tile);
+      if (place && !tile.classList.contains("selected")) select(place.row, place.column, false);
     });
     tile.addEventListener("click", function () {
-      select(index, false);
+      var place = locate(tile);
+      if (!place) return;
+      select(place.row, place.column, false);
       activate();
     });
   });
@@ -118,10 +144,16 @@
     var code = event.keyCode;
     if (key === "ArrowLeft" || code === 37) {
       event.preventDefault();
-      select(Math.max(0, selected - 1), true);
+      select(current.row, current.column - 1, true);
     } else if (key === "ArrowRight" || code === 39) {
       event.preventDefault();
-      select(Math.min(tiles.length - 1, selected + 1), true);
+      select(current.row, current.column + 1, true);
+    } else if (key === "ArrowUp" || code === 38) {
+      event.preventDefault();
+      select(current.row - 1, lastColumn[current.row - 1], true);
+    } else if (key === "ArrowDown" || code === 40) {
+      event.preventDefault();
+      select(current.row + 1, lastColumn[current.row + 1], true);
     } else if (key === "Enter" || code === 13) {
       event.preventDefault();
       if (!event.repeat) activate();
@@ -134,12 +166,12 @@
   document.addEventListener("visibilitychange", function () {
     if (!document.hidden) {
       updateClock();
-      select(selected, true);
+      select(current.row, current.column, true);
     }
   });
 
   api.setAdapter(adapter);
   updateClock();
   window.setInterval(updateClock, 1000);
-  select(0, true);
+  select(0, 0, true);
 }());
