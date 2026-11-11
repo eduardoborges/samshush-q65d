@@ -88,16 +88,21 @@ function createUI() {
     tile(document, "youtube", "YouTube"), tile(document, "stremio", "Stremio"), tile(document, "spotify", "Spotify"));
   const inputs = new Node(document, ["tiles"]).append(tile(document, "tv", "TV ao vivo"));
   body.append(news, apps, inputs);
+  document.body = body;
   document.getElementById = id => ids[id] || null;
   document.querySelectorAll = selector => body.querySelectorAll(selector);
   const actions = [];
+  const timers = new Map();
+  let timerID = 0;
   const window = {
     LauncherDevice: {
       available: true,
       activate(action) { actions.push(action); return Promise.resolve(); },
       back() { return Promise.resolve(); }
     },
-    setInterval() {}
+    setInterval() {},
+    setTimeout(callback, delay) { timers.set(++timerID, { callback, delay }); return timerID; },
+    clearTimeout(id) { timers.delete(id); }
   };
   vm.runInNewContext(source, { window, document, console, Promise, Map, WeakMap, Date }, { filename: "ui.js" });
   const key = name => listeners.keydown({ key: name, preventDefault() {} });
@@ -106,7 +111,8 @@ function createUI() {
     news.hidden = false;
     window.LauncherUI.refresh();
   };
-  return { ui: window.LauncherUI, document, news, ids, actions, key, selected, show };
+  const restTimers = () => [...timers.values()].filter(timer => timer.callback.name === "rest");
+  return { ui: window.LauncherUI, document, body, news, ids, actions, listeners, key, selected, show, restTimers };
 }
 
 const settle = () => new Promise(resolve => setImmediate(resolve));
@@ -184,4 +190,35 @@ test("app tiles still map to their fixed actions", async () => {
   await settle();
   assert.deepEqual(plain(h.actions), [{ id: "tv", type: "source" }]);
   assert.deepEqual(plain(h.ui.getSelection()), { id: "tv", type: "source" });
+});
+
+test("after ten minutes without a key the backdrop rests, and the next key only wakes it", async () => {
+  const h = createUI();
+  assert.deepEqual(h.restTimers().map(timer => timer.delay), [10 * 60 * 1000]);
+  h.key("ArrowRight");
+  assert.deepEqual(h.selected(), ["stremio"]);
+  assert.equal(h.restTimers().length, 1);
+
+  h.restTimers()[0].callback();
+  assert.ok(h.body.classes.has("resting"));
+  h.key("Enter");
+  await settle();
+  assert.ok(!h.body.classes.has("resting"));
+  assert.deepEqual(h.actions, []);
+  assert.deepEqual(h.selected(), ["stremio"]);
+  h.key("ArrowRight");
+  assert.deepEqual(h.selected(), ["spotify"]);
+  assert.equal(h.restTimers().length, 1);
+});
+
+test("an app in front stops the countdown and coming back restarts it awake", () => {
+  const h = createUI();
+  h.restTimers()[0].callback();
+  h.document.hidden = true;
+  h.listeners.visibilitychange();
+  assert.equal(h.restTimers().length, 0);
+  h.document.hidden = false;
+  h.listeners.visibilitychange();
+  assert.ok(!h.body.classes.has("resting"));
+  assert.equal(h.restTimers().length, 1);
 });

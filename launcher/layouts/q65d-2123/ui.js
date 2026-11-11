@@ -28,6 +28,9 @@
   var adapter = window.LauncherDevice;
   var current = { row: 0, column: 0 };
   var busy = false;
+  // After ten minutes without a key press the gradient fades to black to save power.
+  var restDelay = 10 * 60 * 1000;
+  var restTimer = null;
 
   function collect() {
     rows = Array.prototype.slice.call(document.querySelectorAll(".tiles")).filter(function (shelf) {
@@ -167,6 +170,20 @@
     date.textContent = day;
   }
 
+  function rest() {
+    document.body.classList.add("resting");
+  }
+
+  // Restarts the ten minutes and says whether the screen was resting, so the key that brings the
+  // gradient back does nothing else.
+  function wake() {
+    var resting = document.body.classList.contains("resting");
+    document.body.classList.remove("resting");
+    window.clearTimeout(restTimer);
+    restTimer = window.setTimeout(rest, restDelay);
+    return resting;
+  }
+
   var api = {
     onSelection: null,
     onAction: null,
@@ -198,7 +215,9 @@
   document.addEventListener("keydown", function (event) {
     var key = event.key;
     var code = event.keyCode;
-    if (key === "ArrowLeft" || code === 37) {
+    if (wake()) {
+      event.preventDefault();
+    } else if (key === "ArrowLeft" || code === 37) {
       event.preventDefault();
       select(current.row, current.column - 1, true);
     } else if (key === "ArrowRight" || code === 39) {
@@ -220,15 +239,19 @@
   });
 
   document.addEventListener("visibilitychange", function () {
-    if (!document.hidden) {
-      updateClock();
-      select(current.row, current.column, true);
+    if (document.hidden) {
+      window.clearTimeout(restTimer);
+      return;
     }
+    wake();
+    updateClock();
+    select(current.row, current.column, true);
   });
 
   api.setAdapter(adapter);
   updateClock();
   window.setInterval(updateClock, 1000);
+  wake();
   collect();
   if (!selectId("youtube", true)) select(0, 0, true);
 }());
