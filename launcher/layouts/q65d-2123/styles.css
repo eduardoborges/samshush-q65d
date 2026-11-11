@@ -56,6 +56,8 @@ p, h1, h2 { margin: 0; }
   font-variant-numeric: tabular-nums;
 }
 
+.side { display: flex; flex-direction: column; gap: .9vw; }
+
 .widgets { display: flex; gap: .9vw; align-items: stretch; }
 
 .quote, .sea, .forecast {
@@ -85,7 +87,30 @@ p, h1, h2 { margin: 0; }
 
 .sea, .forecast { display: flex; gap: 1.5vw; }
 
+/* The beach card takes the width left by the dollar, so both rows end at the same edges. */
+.sea { flex: 1; justify-content: space-between; }
+
 .widget-value .low { color: rgba(235, 235, 245, .6); }
+
+/* The rest of the week, in the detail size so it reads as secondary. */
+.forecast-week {
+  margin: 0 0 0 auto;
+  padding: 0 0 0 1.5vw;
+  list-style: none;
+  border-left: 1px solid rgba(255, 255, 255, .10);
+  font-size: .7875vw;
+  font-variant-numeric: tabular-nums;
+}
+
+.forecast-week li {
+  display: grid;
+  grid-template-columns: 2.2vw 2.6vw 5.4vw 2.4vw 1.8vw 1.8vw;
+  gap: .6vw;
+  line-height: 1.6;
+}
+
+.week-date, .week-sky, .week-rain, .week-low { color: rgba(235, 235, 245, .6); }
+.week-rain, .week-high, .week-low { text-align: right; }
 
 /* Same box as .widget-value, so the tide line sits level with the other details. */
 .tide-chart {

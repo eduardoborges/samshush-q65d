@@ -40,47 +40,17 @@ function payload(overrides = {}) {
   }, overrides);
 }
 
-function weatherPayload(overrides = {}) {
-  const time = [];
-  const uv = [];
-  for (let i = 0; i < 72; i += 1) {
-    const at = new Date(MIDNIGHT + i * HOUR);
-    time.push(at.getTime() / 1000);
-    // Peaks before 08:30 and after 03:30 tomorrow fall outside the hours the card looks at.
-    uv.push(i === 8 || i === 29 ? 11 : at.getHours() === 12 ? 9.4 : 0);
-  }
-  const day = offset => new Date(2026, 10, 11 + offset).getTime() / 1000;
-  return Object.assign({
-    current: { time: (NOW - 10 * 60 * 1000) / 1000, wind_speed_10m: 17.2, wind_gusts_10m: 36.6 },
-    hourly: { time, uv_index: uv },
-    daily: {
-      time: [day(0), day(1), day(2)],
-      weather_code: [80, 2, 0],
-      temperature_2m_max: [31.2, 30.4, 32],
-      temperature_2m_min: [24.6, 23.7, 25],
-      precipitation_probability_max: [60, 10, 0]
-    }
-  }, overrides);
-}
-
-function withDaily(changes) {
-  const base = weatherPayload();
-  return weatherPayload({ daily: Object.assign({}, base.daily, changes) });
-}
-
 function element(id) {
-  const node = { id, hidden: ["sea", "sea-air", "forecast"].includes(id), textContent: "", children: [] };
+  const node = { id, hidden: id === "sea", textContent: "", children: [] };
   node.appendChild = child => { node.children.push(child); return child; };
   node.removeChild = child => { node.children.splice(node.children.indexOf(child), 1); return child; };
   Object.defineProperty(node, "firstChild", { get: () => node.children[0] || null });
   return node;
 }
 
-function createSea(responses, weatherResponses = [], now = NOW) {
+function createSea(responses, now = NOW) {
   const elements = {};
-  for (const id of ["sea", "sea-waves", "sea-detail", "sea-chart", "sea-tide", "sea-air", "sea-wind",
-    "sea-weather", "forecast", "forecast-0-high", "forecast-0-low", "forecast-0-detail", "forecast-1-high",
-    "forecast-1-low", "forecast-1-detail"]) elements[id] = element(id);
+  for (const id of ["sea", "sea-waves", "sea-detail", "sea-chart", "sea-tide"]) elements[id] = element(id);
   const timers = new Map();
   let timerID = 0;
   const requests = [];
@@ -97,7 +67,7 @@ function createSea(responses, weatherResponses = [], now = NOW) {
   const window = {
     fetch(url, options) {
       requests.push({ url, options });
-      const next = (new URL(url).hostname === "api.open-meteo.com" ? weatherResponses : responses).shift();
+      const next = responses.shift();
       if (next instanceof Error) return Promise.reject(next);
       return Promise.resolve({ ok: true, json: () => Promise.resolve(next) });
     },
@@ -118,7 +88,7 @@ function createSea(responses, weatherResponses = [], now = NOW) {
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
 function expiryTimer(h) {
-  return [...h.timers.values()].find(timer => timer.callback.name === "render");
+  return [...h.timers.values()].find(timer => timer.callback.name === "hide");
 }
 
 test("shows waves, water and the next tides from the marine API", async () => {
@@ -218,10 +188,9 @@ test("keeps the last forecast after a failed refresh, then hides it when it expi
   h.clock.now = NOW + 30 * 60 * 1000;
   await h.sea.refresh();
   assert.equal(h.elements.sea.hidden, false);
-  assert.equal(h.requests.length, 4);
+  assert.equal(h.requests.length, 2);
   const expiry = expiryTimer(h);
   assert.equal(expiry.delay, 6 * HOUR - 45 * 60 * 1000);
-  h.clock.now = NOW - 15 * 60 * 1000 + 6 * HOUR + 1;
   expiry.callback();
   assert.equal(h.elements.sea.hidden, true);
 });
@@ -233,117 +202,4 @@ test("hides stale data and series without two upcoming turns", async () => {
   const ended = createSea([payload({ hourly: series(MIDNIGHT - 30 * HOUR, 36) })]);
   await settle();
   assert.equal(ended.elements.sea.hidden, true);
-});
-
-test("shows wind, gusts and the UV peak over the next 18 hours", async () => {
-  const h = createSea([payload()], [weatherPayload()]);
-  await settle();
-  const request = new URL(h.requests[1].url);
-  assert.equal(request.origin, "https://api.open-meteo.com");
-  assert.equal(request.searchParams.get("wind_speed_unit"), "kmh");
-  assert.equal(request.searchParams.get("timeformat"), "unixtime");
-  assert.equal(h.requests[1].options.credentials, "omit");
-  assert.equal(h.elements["sea-air"].hidden, false);
-  assert.equal(h.elements["sea-wind"].textContent, "17 km/h");
-  assert.equal(h.elements["sea-weather"].textContent, "rajadas 37 km/h · UV máx. 9");
-});
-
-test("shows today and tomorrow with highs, lows, sky and rain chance", async () => {
-  const h = createSea([payload()], [weatherPayload()]);
-  await settle();
-  assert.equal(h.elements.forecast.hidden, false);
-  const text = id => h.elements[id].textContent;
-  assert.deepEqual(
-    [text("forecast-0-high"), text("forecast-0-low"), text("forecast-0-detail")],
-    ["31°", "25°", "Pancadas · chuva 60%"]
-  );
-  assert.deepEqual(
-    [text("forecast-1-high"), text("forecast-1-low"), text("forecast-1-detail")],
-    ["30°", "24°", "Sol e nuvens · chuva 10%"]
-  );
-});
-
-test("matches forecast days to the TV calendar and leaves out unknown parts", async () => {
-  const yesterday = new Date(2026, 10, 10).getTime() / 1000;
-  const late = withDaily({
-    time: [yesterday, ...weatherPayload().daily.time.slice(0, 2)],
-    weather_code: [3, 42, null],
-    temperature_2m_max: [29, 31.2, 30.4],
-    temperature_2m_min: [22, 24.6, 23.7],
-    precipitation_probability_max: [5, 60, null]
-  });
-  const h = createSea([payload()], [late]);
-  await settle();
-  assert.equal(h.elements["forecast-0-high"].textContent, "31°");
-  assert.equal(h.elements["forecast-0-detail"].textContent, "chuva 60%");
-  assert.equal(h.elements["forecast-1-detail"].textContent, "");
-
-  const noTomorrow = createSea([payload()], [withDaily({
-    time: [yesterday, weatherPayload().daily.time[0], weatherPayload().daily.time[0] + 2 * 86400]
-  })]);
-  await settle();
-  assert.equal(noTomorrow.elements.forecast.hidden, true);
-  assert.equal(noTomorrow.elements["sea-air"].hidden, false);
-});
-
-test("the forecast shows without the sea, and the sea without the forecast", async () => {
-  const noSea = createSea([new Error("offline")], [weatherPayload()]);
-  await settle();
-  assert.equal(noSea.elements.sea.hidden, true);
-  assert.equal(noSea.elements.forecast.hidden, false);
-
-  const failed = createSea([payload()], [new Error("offline")]);
-  await settle();
-  assert.equal(failed.elements.sea.hidden, false);
-  assert.equal(failed.elements["sea-air"].hidden, true);
-  assert.equal(failed.elements.forecast.hidden, true);
-
-  const stale = createSea([payload()], [weatherPayload({
-    current: { time: (NOW - 7 * HOUR) / 1000, wind_speed_10m: 20, wind_gusts_10m: 30 }
-  })]);
-  await settle();
-  assert.equal(stale.elements.sea.hidden, false);
-  assert.equal(stale.elements["sea-air"].hidden, true);
-  assert.equal(stale.elements.forecast.hidden, true);
-
-  const gaps = weatherPayload();
-  gaps.hourly.uv_index = gaps.hourly.uv_index.map(() => null);
-  const partial = createSea([payload()], [gaps]);
-  await settle();
-  assert.equal(partial.elements["sea-weather"].textContent, "rajadas 37 km/h");
-});
-
-test("rejects malformed forecasts", () => {
-  const { sea } = createSea([new Error("offline")]);
-  const base = weatherPayload();
-  for (const value of [
-    null,
-    weatherPayload({ current: { time: base.current.time, wind_speed_10m: 10 } }),
-    weatherPayload({ hourly: { time: base.hourly.time, uv_index: base.hourly.uv_index.slice(1) } }),
-    weatherPayload({ hourly: { time: base.hourly.time, uv_index: base.hourly.uv_index.map(() => -1) } }),
-    withDaily({ temperature_2m_max: [99, 30, 30] }),
-    withDaily({ precipitation_probability_max: [120, 10, 0] }),
-    withDaily({ weather_code: [1.5, 2, 0] }),
-    withDaily({ temperature_2m_min: [24, 23] }),
-    weatherPayload({ daily: undefined })
-  ]) {
-    assert.equal(sea.parseWeather(value), null);
-  }
-});
-
-test("the forecast keeps its last reading and hides first when it expires", async () => {
-  const older = weatherPayload({ current: { time: (NOW - 5 * HOUR) / 1000, wind_speed_10m: 30, wind_gusts_10m: 40 } });
-  const h = createSea([payload(), payload()], [older, new Error("offline")]);
-  await settle();
-  assert.equal(h.elements["sea-wind"].textContent, "30 km/h");
-  await h.sea.refresh();
-  assert.equal(h.elements["sea-air"].hidden, false);
-  assert.equal(h.elements.forecast.hidden, false);
-  const expiry = expiryTimer(h);
-  assert.equal(expiry.delay, HOUR);
-  h.clock.now = NOW + HOUR + 1;
-  expiry.callback();
-  assert.equal(h.elements.sea.hidden, false);
-  assert.equal(h.elements["sea-air"].hidden, true);
-  assert.equal(h.elements.forecast.hidden, true);
 });

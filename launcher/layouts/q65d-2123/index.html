@@ -12,6 +12,7 @@
     <script src="ui.js" defer></script>
     <script src="quote.js" defer></script>
     <script src="sea.js" defer></script>
+    <script src="forecast.js" defer></script>
   </head>
   <body>
     <div class="backdrop" aria-hidden="true"></div>
@@ -21,40 +22,48 @@
           <p class="date" id="date"></p>
           <time class="clock" id="clock" aria-label="Hora atual"></time>
         </div>
-        <div class="widgets">
+        <div class="side">
+          <div class="widgets">
+            <section class="sea glass" id="sea" aria-label="Mar em Fortaleza" hidden>
+              <div class="sea-now">
+                <p class="widget-label">Ondas · Fortaleza</p>
+                <p class="widget-value" id="sea-waves"></p>
+                <p class="widget-detail" id="sea-detail"></p>
+              </div>
+              <div class="sea-tide">
+                <p class="widget-label">Maré</p>
+                <svg class="tide-chart" id="sea-chart" viewBox="0 0 300 72" aria-hidden="true"></svg>
+                <p class="widget-detail" id="sea-tide"></p>
+              </div>
+              <div class="sea-air" id="sea-air" hidden>
+                <p class="widget-label">Vento</p>
+                <p class="widget-value" id="sea-wind"></p>
+                <p class="widget-detail" id="sea-weather"></p>
+              </div>
+            </section>
+            <section class="quote glass" id="quote" aria-label="Cotação do dólar" hidden>
+              <p class="widget-label">Dólar</p>
+              <p class="widget-value" id="quote-price"></p>
+              <p class="widget-detail"><span class="quote-change" id="quote-change"></span> <span id="quote-time"></span></p>
+            </section>
+          </div>
           <section class="forecast glass" id="forecast" aria-label="Previsão do tempo em Fortaleza" hidden>
-            <div class="forecast-day">
-              <p class="widget-label">Hoje</p>
+            <div>
+              <p class="widget-label">Agora</p>
+              <p class="widget-value" id="forecast-now"></p>
+              <p class="widget-detail" id="forecast-now-detail"></p>
+            </div>
+            <div>
+              <p class="widget-label">Hoje · <span id="forecast-0-date"></span></p>
               <p class="widget-value"><span id="forecast-0-high"></span> <span class="low" id="forecast-0-low"></span></p>
               <p class="widget-detail" id="forecast-0-detail"></p>
             </div>
-            <div class="forecast-day">
-              <p class="widget-label">Amanhã</p>
+            <div>
+              <p class="widget-label">Amanhã · <span id="forecast-1-date"></span></p>
               <p class="widget-value"><span id="forecast-1-high"></span> <span class="low" id="forecast-1-low"></span></p>
               <p class="widget-detail" id="forecast-1-detail"></p>
             </div>
-          </section>
-          <section class="sea glass" id="sea" aria-label="Mar em Fortaleza" hidden>
-            <div class="sea-now">
-              <p class="widget-label">Ondas · Fortaleza</p>
-              <p class="widget-value" id="sea-waves"></p>
-              <p class="widget-detail" id="sea-detail"></p>
-            </div>
-            <div class="sea-tide">
-              <p class="widget-label">Maré</p>
-              <svg class="tide-chart" id="sea-chart" viewBox="0 0 300 72" aria-hidden="true"></svg>
-              <p class="widget-detail" id="sea-tide"></p>
-            </div>
-            <div class="sea-air" id="sea-air" hidden>
-              <p class="widget-label">Vento</p>
-              <p class="widget-value" id="sea-wind"></p>
-              <p class="widget-detail" id="sea-weather"></p>
-            </div>
-          </section>
-          <section class="quote glass" id="quote" aria-label="Cotação do dólar" hidden>
-            <p class="widget-label">Dólar</p>
-            <p class="widget-value" id="quote-price"></p>
-            <p class="widget-detail"><span class="quote-change" id="quote-change"></span> <span id="quote-time"></span></p>
+            <ol class="forecast-week" id="forecast-week" aria-label="Próximos dias"></ol>
           </section>
         </div>
       </header>
