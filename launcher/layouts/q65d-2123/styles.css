@@ -58,14 +58,14 @@ p, h1, h2 { margin: 0; }
 
 .widgets { display: flex; gap: .9vw; align-items: stretch; }
 
-.quote, .sea {
+.quote, .sea, .forecast {
   padding: .9vw 1.2vw;
   border-radius: .975vw;
 }
 
 .quote { min-width: 11.25vw; text-align: right; }
 
-.quote[hidden], .sea[hidden] { display: none; }
+.quote[hidden], .sea[hidden], .sea-air[hidden], .forecast[hidden] { display: none; }
 
 .widget-value {
   margin-top: .225vw;
@@ -83,7 +83,9 @@ p, h1, h2 { margin: 0; }
   font-variant-numeric: tabular-nums;
 }
 
-.sea { display: flex; gap: 1.5vw; }
+.sea, .forecast { display: flex; gap: 1.5vw; }
+
+.widget-value .low { color: rgba(235, 235, 245, .6); }
 
 /* Same box as .widget-value, so the tide line sits level with the other details. */
 .tide-chart {
