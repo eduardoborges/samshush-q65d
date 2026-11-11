@@ -48,16 +48,15 @@
           </section>
           <div class="side-row">
             <section class="moon glass" id="moon" aria-label="Lua e maré grande" hidden>
-              <div>
-                <p class="widget-label">Lua</p>
-                <p class="widget-value" id="moon-name"></p>
-                <p class="widget-detail" id="moon-light"></p>
-              </div>
-              <div>
-                <p class="widget-label">Maré grande</p>
-                <p class="widget-value" id="moon-tide"></p>
-                <p class="widget-detail" id="moon-tide-detail"></p>
-              </div>
+              <p class="widget-label" id="moon-name"></p>
+              <p class="widget-value moon-value">
+                <svg class="moon-disc" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle class="moon-dark" cx="12" cy="12" r="11"></circle>
+                  <path class="moon-lit" id="moon-lit"></path>
+                </svg>
+                <span id="moon-light"></span>
+              </p>
+              <p class="widget-detail" id="moon-tide"></p>
             </section>
             <section class="forecast glass" id="forecast" aria-label="Previsão do tempo em Fortaleza" hidden>
               <div>

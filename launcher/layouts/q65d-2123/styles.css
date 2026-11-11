@@ -87,7 +87,16 @@ p, h1, h2 { margin: 0; }
   font-variant-numeric: tabular-nums;
 }
 
-.sea, .moon, .forecast { display: flex; gap: 1.5vw; }
+.sea, .forecast { display: flex; gap: 1.5vw; }
+
+/* A small, nearly square card: the phase drawn next to its lit fraction. */
+.moon { padding-left: .9vw; padding-right: .9vw; }
+
+.moon-value { display: flex; align-items: center; gap: .45vw; }
+
+.moon-disc { flex: none; width: 1.9vw; height: 1.9vw; }
+.moon-dark { fill: rgba(255, 255, 255, .14); }
+.moon-lit { fill: #f5f5f7; }
 
 .widget-value .low { color: rgba(235, 235, 245, .6); }
 

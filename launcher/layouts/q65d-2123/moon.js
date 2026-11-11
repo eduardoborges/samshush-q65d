@@ -10,9 +10,10 @@
   var springWindow = 1.5 * day;
   var refreshDelay = 60 * 60 * 1000;
   var container = document.getElementById("moon");
-  var fields = ["moon-name", "moon-light", "moon-tide", "moon-tide-detail"].map(function (id) {
+  var fields = ["moon-name", "moon-light", "moon-tide"].map(function (id) {
     return document.getElementById(id);
   });
+  var disc = document.getElementById("moon-lit");
   var timer = null;
   var stopped = false;
 
@@ -71,22 +72,35 @@
     var age = (now - lastNew.time) / (nextNew.time - lastNew.time);
     var lit = Math.round((1 - Math.cos(2 * Math.PI * age)) / 2 * 100);
     var name = near && Math.abs(near.time - now) <= day / 2 ? (near.full ? "Lua cheia" : "Lua nova")
-      : age < 0.5 ? "Crescente" : "Minguante";
-    var tide = near || upcoming;
+      : age < 0.5 ? "Lua crescente" : "Lua minguante";
     return {
       name: name,
-      light: lit + "% iluminada",
-      tide: near ? "Agora" : date(upcoming.time),
-      tideDetail: tide.full ? "lua cheia" : "lua nova"
+      light: lit + "%",
+      tide: "maré grande " + (near ? "agora" : date(upcoming.time)),
+      lit: lit / 100,
+      waxing: age < 0.5
     };
+  }
+
+  // The lit part of a disc of radius 11 centred in a 24 by 24 box: the limb on the lit side, then
+  // back along the terminator, an ellipse that bulges toward the lit side while it is a crescent.
+  // Fortaleza is south of the equator, so a waxing moon is lit on the left.
+  function litPath(lit, waxing) {
+    var radius = 11;
+    var terminator = Math.abs(1 - 2 * lit) * radius;
+    var limbSweep = waxing ? 0 : 1;
+    var terminatorSweep = (lit < 0.5) === waxing ? 1 : 0;
+    return "M12 1A" + radius + " " + radius + " 0 0 " + limbSweep + " 12 23" +
+      "A" + terminator.toFixed(2) + " " + radius + " 0 0 " + terminatorSweep + " 12 1Z";
   }
 
   function render() {
     if (stopped) return;
     var text = describe(Date.now());
-    [text.name, text.light, text.tide, text.tideDetail].forEach(function (value, index) {
+    [text.name, text.light, text.tide].forEach(function (value, index) {
       fields[index].textContent = value;
     });
+    disc.setAttribute("d", litPath(text.lit, text.waxing));
     container.hidden = false;
     window.clearTimeout(timer);
     if (!document.hidden) timer = window.setTimeout(render, refreshDelay);
@@ -103,8 +117,8 @@
     document.removeEventListener("visibilitychange", visibilityChanged);
   }
 
-  window.LauncherMoon = { phaseTime: phaseTime, describe: describe, stop: stop };
-  if (!container || fields.some(function (field) { return !field; })) return;
+  window.LauncherMoon = { phaseTime: phaseTime, describe: describe, litPath: litPath, stop: stop };
+  if (!container || !disc || fields.some(function (field) { return !field; })) return;
   document.addEventListener("visibilitychange", visibilityChanged);
   render();
 }());
