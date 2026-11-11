@@ -9,6 +9,7 @@ import hashlib
 import ipaddress
 import json
 import os
+import re
 import secrets
 import shlex
 import shutil
@@ -18,6 +19,7 @@ import tempfile
 from pathlib import Path, PurePosixPath
 
 import device_scripts
+import home
 import startup
 
 HERE = Path(__file__).resolve().parent
@@ -299,6 +301,13 @@ def check_result(result):
             )
 
 
+def minute_of_day(value):
+    if not re.fullmatch(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]", value):
+        raise argparse.ArgumentTypeError("Use a local time in 24-hour HH:MM format")
+    hour, minute = value.split(":")
+    return int(hour) * 60 + int(minute)
+
+
 def main():
     global ACTIVE_PROFILE
     # Group choices depend on the profile, so read it before building the parser.
@@ -354,12 +363,13 @@ def main():
         help="Back up and natively remove the six assessed optional packages",
     )
     packages.add_argument(
-        "operation", choices=("prepare", "backup", "remove", "status")
+        "operation",
+        choices=("prepare", "prepare-returned", "backup", "remove", "status"),
     )
     packages.add_argument(
         "--backup-dir",
         type=Path,
-        help="New private directory for prepare; verified existing backup for remove",
+        help="New private directory for preparation; original attempt directory for backup/remove",
     )
     sub.add_parser("hdmi-audit", help="Read HDMI-CEC settings and connected devices")
     sub.add_parser(
@@ -415,6 +425,72 @@ def main():
         "auto-update", help="Read, disable or restore native automatic firmware updates"
     )
     updater.add_argument("operation", choices=("status", "disable", "restore"))
+    home_control = sub.add_parser(
+        "home", help="Optional native Home startup preferences or Apple TV shortcut row"
+    )
+    home_control.add_argument(
+        "operation", choices=("inspect", "install", "status", "remove")
+    )
+    home_scope = home_control.add_mutually_exclusive_group()
+    home_scope.add_argument(
+        "--startup-only",
+        action="store_true",
+        help="Install startup preferences only; arrange source shortcuts in the TV menus",
+    )
+    home_scope.add_argument(
+        "--apple-tv-only",
+        action="store_true",
+        help="Inspect, install, check or restore the Apple TV-only shortcut row",
+    )
+    launchpad = sub.add_parser(
+        "launchpad",
+        help="Optional fullscreen shortcut app and reversible Home assignment",
+    )
+    launchpad.add_argument(
+        "operation",
+        choices=(
+            "inspect",
+            "install",
+            "update",
+            "launch",
+            "activate",
+            "status",
+            "restore",
+        ),
+    )
+    launchpad.add_argument(
+        "--widget",
+        type=Path,
+        help="Signed Shortcuts.wgt; required for install, update and activate",
+    )
+    launchpad.add_argument(
+        "--previous-widget",
+        type=Path,
+        help="Previously installed signed widget; required only for update",
+    )
+    quiet = sub.add_parser(
+        "quiet-hours", help="Put full-screen Art in standby during a daily window"
+    )
+    quiet.add_argument("operation", choices=("inspect", "set", "status", "remove"))
+    quiet.add_argument(
+        "--spotlight-art",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="When the Spotlight screensaver appears, open full-screen Art at any hour "
+        "(set only; off on a new installation, otherwise retain the saved choice)",
+    )
+    quiet.add_argument(
+        "--start",
+        type=minute_of_day,
+        metavar="HH:MM",
+        help="Start of quiet hours, local 24-hour time (inclusive)",
+    )
+    quiet.add_argument(
+        "--end",
+        type=minute_of_day,
+        metavar="HH:MM",
+        help="End of quiet hours, local 24-hour time (exclusive)",
+    )
     sensor = sub.add_parser(
         "sound-sensor",
         help="Separately block or restore the ambient-sound capture app",
@@ -434,6 +510,36 @@ def main():
             parser.error("Optional controls have not been validated for this profile")
         if args.action == "apply" and args.scope != "voice":
             parser.error("Only voice runtime controls are supported by this profile")
+    if args.action == "quiet-hours":
+        if args.operation == "set":
+            if args.start is None or args.end is None or args.start == args.end:
+                parser.error(
+                    "quiet-hours set requires distinct --start and --end times"
+                )
+        elif args.spotlight_art is not None:
+            parser.error(
+                "--spotlight-art and --no-spotlight-art are only valid with quiet-hours set"
+            )
+        elif args.start is not None or args.end is not None:
+            parser.error("--start and --end are only valid with quiet-hours set")
+    if args.action == "launchpad":
+        needs_widget = args.operation in ("install", "update", "activate")
+        if needs_widget != (args.widget is not None):
+            parser.error(
+                "--widget is required only for launchpad install, update and activate"
+            )
+        if (args.operation == "update") != (args.previous_widget is not None):
+            parser.error("--previous-widget is required only for launchpad update")
+    if args.action == "home":
+        if args.operation == "install" and not (
+            args.startup_only or args.apple_tv_only
+        ):
+            parser.error(
+                "Choose home install --startup-only for startup preferences, or "
+                "home install --apple-tv-only for the native shortcut row."
+            )
+        if args.operation != "install" and args.startup_only:
+            parser.error("--startup-only is only valid with home install")
     if args.action == "plan":
         print(json.dumps(policy(), indent=2))
         return 0
@@ -470,6 +576,14 @@ def main():
         parser.error("--tv is required for TV operations")
     if not shutil.which("openssl"):
         raise ValueError("OpenSSL is required")
+    if args.action == "home" and args.apple_tv_only:
+        import home_layout
+
+        return home_layout.run(args, sys.modules[__name__])
+    if args.action == "launchpad":
+        import launchpad
+
+        return launchpad.run(args, sys.modules[__name__])
     if args.action == "packages":
         if args.profile != "frame":
             parser.error("Package removal is only available on the Frame profile")
@@ -511,7 +625,31 @@ def main():
         "completed": False,
     }
     try:
-        if args.action == "startup" and args.operation in ("audit", "probe"):
+        if args.action == "quiet-hours":
+            import home_layout
+            import quiet_hours_script
+
+            if policy()["model"] != home.MODEL or policy()["build"] != home.BUILD:
+                raise ValueError(
+                    "Art quiet hours require the verified Frame Pro model and build"
+                )
+            home_layout.verify_model(args.tv)
+            script = quiet_hours_script.render(
+                args.operation,
+                start=args.start,
+                end=args.end,
+                spotlight_art=args.spotlight_art,
+                assets={
+                    name: (payloads / name).read_bytes()
+                    for name in (
+                        "ArtQuietHours.dll",
+                        "ArtQuietHours.runtimeconfig.json",
+                    )
+                },
+            )
+            # Run alongside the native screen and power services in PID 1's mount namespace.
+            command = home_layout.device_command(script)
+        elif args.action == "startup" and args.operation in ("audit", "probe"):
             template = (
                 device_scripts.STARTUP_AUDIT
                 if args.operation == "audit"
@@ -571,6 +709,8 @@ def main():
             script = device_scripts.AUTO_UPDATE.replace(
                 "@@BUILD@@", policy()["build"]
             ).replace("@@MODE@@", args.operation)
+        elif args.action == "home":
+            script = home.render(args.operation, policy())
         elif args.action == "services":
             script = render(args.operation, "services", unit_group=args.group)
         elif args.action == "certificates":
@@ -611,7 +751,9 @@ def main():
                     ASSETS / "certificates" / cert["file"], stage / cert["file"]
                 )
         # The stage path is generated here and consists solely of fixed path text and hex.
-        script = f"export FRAME_STAGE={shlex.quote(str(stage))}\n" + script
+        if args.action != "quiet-hours":
+            script = f"export FRAME_STAGE={shlex.quote(str(stage))}\n" + script
+            command = wrapped(script)
         print(
             "Acquiring temporary root. Even inspect/status execute the root exploit.",
             flush=True,
@@ -624,7 +766,7 @@ def main():
                 # even while an authorized command is still within its budget.
                 accept_timeout=180,
                 command_timeout=180,
-                commands=(wrapped(script),),
+                commands=(command,),
                 payloads=payloads,
             )
         )

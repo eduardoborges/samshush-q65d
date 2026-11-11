@@ -86,8 +86,9 @@ Optional controls still require the owner’s approval on other installations.
 | Viewing Information Services | Manual opt-out recommended | Viewing-data consent is separate from voice settings. Turn it off in the TV’s privacy settings. |
 | Content analysis and iACR | Kept enabled | Content analysis handles logo recognition and HDMI auto-detection. iACR provides playback controls. Disabling these can break useful input features. |
 | Screen-based game/app recognition | Disabled | The detector requests 960×540 frames at a configured 2.5-second interval, then feeds a 64×64 image into an INT8 model. Samshush blocks the recognition launcher and UI-image detector. |
-| Recognition models and AI interpreter | Selected packages uninstalled | Removes the AI interpreter and three recognition/model-manager packages, including about 74 MiB of installed recognition resources. Related AI interpretation and recognition features are unavailable. Other model packages remain installed. |
-| Samsung Analytics app | Uninstalled | Removes the separate Samsung Analytics package and its app-control upload handlers. This does not remove analytics code embedded in other apps. |
+| Recognition models and AI interpreter | Selected packages removed | The non-branded screen-analysis model manager can reinstall a missing model before boot-time shutdown. Keep the runtime blocks and recheck after restart; removal alone is not a persistent barrier. |
+| Samsung Analytics app | Removed; service updater blocked | The standalone app and its storage are absent. Its separate service updater is disabled to block that reinstall path; other apps may still collect analytics. |
+| Samsung service updater | Disabled | Blocks its Analytics reinstall path and automatic Samsung Account, Knox and other Samsung service updates. Existing services and manual firmware updates remain enabled. |
 | Visual analysis and subtitle recognition | Selected services disabled | The screen-analysis and cognition managers sit outside the existing game/app recognition block. Disabling them removes food/text discovery and subtitle recognition; ordinary subtitles and accessibility need separate checks. |
 | Advertising and usage analytics | Selected components disabled | Samshush blocks Adagent, targeted-ad, CoBA ads and the selected analytics and diagnostic-reporting services. Other apps may still send telemetry. |
 | TV Plus, Gaming Hub and Samsung Health | Selected apps disabled | Samshush blocks the selected apps and Health startup paths. Shared TV Plus broadcast and channel services stay enabled. |
@@ -101,13 +102,18 @@ Optional controls still require the owner’s approval on other installations.
 | HDMI-CEC / Anynet+ and ARC/eARC | Kept enabled | CEC handles device power and remote commands. ARC/eARC sends audio to the soundbar. |
 | eMudhra / emSign trust roots | Four selected roots removed | Samshush filters these roots from 11 certificate files and leaves other certificates intact. Embedded app trust stores and cached certificates are unaffected. |
 | Automatic firmware updates | Auto Update off; update manually | Check compatibility before installing firmware. An update can reset the changes or patch the root exploit. |
+| Home layout and startup | Optional native presets | An Apple TV-only row simplifies Samsung’s existing interface. The full-screen replacement below is separate; its Samsung Home fallback retains the original row. |
+| Full-screen shortcut Home | Optional replacement applied | Open Apple TV, HDMI ports, Settings and Art over a Monet background from the Home button. Back returns to Samsung Home; optional weather adds current conditions and today’s high/low. |
+| Art and the Spotlight screensaver | Optional quiet hours and automatic Art Mode | Choose when full-screen Art should put the Frame in standby. To replace Samsung’s idle Spotlight screensaver with artwork throughout the day, enable `--spotlight-art`. |
 | Settings, manual Art Mode, playback, browser, Netflix, networking, One Connect and DRM | Kept enabled | These provide the TV’s core functions. Preserve their shared runtimes and unrelated trust certificates. |
 
-Most app controls disable rather than uninstall. The six packages identified above
-were uninstalled on the tested TV after an off-device backup. The owner confirmed
+Most app controls disable rather than uninstall. Six packages were uninstalled
+after an off-device backup; two later returned and were removed again using a
+fresh backup and separate receipt. On a subsequent boot the screen-analysis
+model package returned again despite the revised shutdown order. The owner confirmed
 Apple TV picture, soundbar volume, input selection and manual Art Mode still work
-after these changes. Fresh reboot persistence and network wake remain unverified
-for this configuration. This doesn’t cover every microphone input
+after the original changes. Complete removal persistence and network wake remain
+unverified. This doesn’t cover every microphone input
 or telemetry source. See [AGENTS.md](AGENTS.md#prove-the-outcome) for test
 coverage and remaining gaps.
 
@@ -118,6 +124,29 @@ requires an app absent from that TV’s registry. Each group has its own recover
 journal. `service-audit` reads current services, app registrations and process
 identities without launching apps or capturing media. For groups with native
 helper checks, apply rolls back if a helper survives the manager shutdown.
+
+## Home Screen (optional)
+
+Optionally replace the default SmartHub noise with a custom home screen
+
+- Create a [Samsung TV signing profile](https://developer.samsung.com/smarttv/develop/tools/additional-tools/vscode/creating-certificates.html) for your TV.
+- Build with `uv run --project tools tools/launchpad.py --sdk /path/to/tizen-studio --profile Samshush --output .local/launchpad-build`. Add `--weather-postcode "$TV_WEATHER_POSTCODE"` for Celsius weather and today's forecast; your location stays in private build files.
+- Use `frame.py launchpad install --widget .local/launchpad-build/Shortcuts.wgt`, then `launchpad launch`. Check Apple TV, Settings, Art Mode and Back before assigning Home.
+- Run `launchpad activate --widget .local/launchpad-build/Shortcuts.wgt` to assign the Home button. `launchpad restore` returns it to Samsung Home. See [AGENTS.md](AGENTS.md#home-screen-optional) for complete commands, updates and recovery.
+
+## Art quiet hours (optional)
+
+On the supported Frame Pro, set a daily window in the TV’s local time. This example puts the Frame in standby when it displays artwork between 10 PM and 7 AM.
+
+```sh
+uv run --project tools tools/frame.py --tv 192.0.2.10 --callback-host 192.0.2.20 quiet-hours set --start 22:00 --end 07:00
+```
+
+Apple TV can keep playing through 10 PM. If you finish watching and switch to Art during quiet hours, the TV goes into standby. At 7 AM, a sleeping TV stays asleep until you wake it. Use `quiet-hours status` to check the schedule, repeat `set` to change the hours, or use `quiet-hours remove` to turn it off.
+
+To open Art automatically whenever Samsung's Spotlight screensaver appears, add `--spotlight-art` to the `set` command. Outside quiet hours the artwork stays on screen. During quiet hours the worker waits for full-screen Art and then requests standby. Use `--no-spotlight-art` with the same hours to turn off the automatic switch. A new installation starts with automatic switching off. Later schedule edits retain your choice.
+
+With quiet hours installed, the custom Home screen shows **Sleep** and **Wake** below Art Mode. Press Down from Art Mode to select Sleep, then Down again for Wake. Left and Right change the selected time by one hour. The CLI and Home use the same schedule.
 
 ## Optional package removal
 
@@ -132,6 +161,18 @@ It uses the native uninstaller; it does not force-delete firmware packages.
 `packages status` checks registration, files and surviving processes. The optional
 boot hook also checks the removal receipt after reapplying service controls.
 
+If an assessed package returns, `packages prepare-returned --backup-dir NEW_PATH`
+backs up only the returned packages in a separate attempt. Use that same directory
+with `packages backup` or `packages remove`. The original receipt and backup stay
+intact; status rejects incomplete attempts and checks all six packages again.
+
+The screen-analysis manager can request a missing model when networking starts.
+Boot reapplication now handles visual analysis and optional delivery first to
+shorten that window. It cannot guarantee that the manager never runs before the
+boot hook. The separate `samsung-service-updates` app group blocks Samsung's
+service updater and has the broader tradeoff described above; removal does not
+apply that group automatically.
+
 The backup is **not a guaranteed reinstallable signed package**, and there is no
 automatic package-restore command. Recovery may require original vendor packages.
 Keep the private backup outside Git. These controls operate within the TV’s OS;
@@ -145,6 +186,7 @@ exact selection, required shutdown order and recovery records.
 uv run --project tools ruff check tools
 uv run --project tools ruff format --check tools
 uv run --project tools python -m unittest discover -s tools/tests -v
+node --test launcher/tests/*.test.cjs
 ```
 
 [Detailed agent prompt](prompts/samsung-tv-privacy.md)

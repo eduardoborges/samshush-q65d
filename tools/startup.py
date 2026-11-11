@@ -182,6 +182,9 @@ if [[ $ACTION == run ]]; then
 fi
 mkdir -m 700 "$LOCK" || fail 'Startup operation already running or interrupted'
 operation_locked=1
+if [[ -e /opt/usr/share/samshush-quiet-hours-v1 || -L /opt/usr/share/samshush-quiet-hours-v1 ]]; then
+    fail 'Remove Art quiet hours before changing the shared boot handoff'
+fi
 if [[ $ACTION == remove ]]; then
     [[ -d $ROOT && ! -L $ROOT ]] || fail 'No startup installation to remove'
     [[ $(stat -c '%u:%a' "$ROOT") == 0:700 ]] || fail 'Unsafe startup directory'
@@ -281,6 +284,11 @@ def bundle(policy, render, assets):
         for name, entry in policy["optional_controls"].items()
         if entry["systemd_units"]
     ]
+    # The visual manager can request an absent model as soon as the network
+    # connects. Stop that installer and background delivery before the larger
+    # voice batch. This shortens the boot window; it is not a persistent mask.
+    priority = {"visual-analysis": 0, "optional-delivery": 1}
+    candidates.sort(key=lambda candidate: priority.get(candidate[0], 2))
     for name, _, scope, options in candidates:
         for action in ("apply", "status"):
             files[f"{name}.{action}"] = (
