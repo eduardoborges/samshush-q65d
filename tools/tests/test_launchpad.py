@@ -46,7 +46,8 @@ LEGACY_MANIFEST = WEATHER_MANIFEST.replace(
 QUOTE_MANIFEST = MANIFEST.replace(
     b'<access origin="https://api.open-meteo.com" subdomains="false"/>\n',
     b'<access origin="https://api.open-meteo.com" subdomains="false"/>\n'
-    b'<access origin="https://economia.awesomeapi.com.br" subdomains="false"/>\n',
+    b'<access origin="https://economia.awesomeapi.com.br" subdomains="false"/>\n'
+    b'<access origin="https://api.binance.com" subdomains="false"/>\n',
 )
 SEA_MANIFEST = QUOTE_MANIFEST.replace(
     b'<access origin="https://economia.awesomeapi.com.br" subdomains="false"/>\n',
@@ -65,10 +66,11 @@ NEWS_MANIFEST = MANIFEST.replace(
     + access("https://s2-g1.glbimg.com")
     + b"</widget>",
 )
-# The release before the news slider read the g1 RSS feed.
+# The release before the news slider read the g1 RSS feed, and its quotes had no USDT.
 RSS_NEWS_MANIFEST = MANIFEST.replace(
     b"</widget>", access("https://g1.globo.com") + b"</widget>"
 )
+AWESOME_ONLY_MANIFEST = QUOTE_MANIFEST.replace(access("https://api.binance.com"), b"")
 DIGESTS = {
     "sha256": "http://www.w3.org/2001/04/xmlenc#sha256",
     "sha512": "http://www.w3.org/2001/04/xmlenc#sha512",
@@ -267,11 +269,17 @@ class LaunchpadTests(unittest.TestCase):
                     {name for name in launchpad.LAYOUT_EXTRAS if name in resources},
                 )
 
-    def test_retired_news_origin_is_accepted_only_in_a_previous_widget(self):
+    def test_retired_origins_are_accepted_only_in_a_previous_widget(self):
+        for manifest, module in (
+            (RSS_NEWS_MANIFEST, "news.js"),
+            (AWESOME_ONLY_MANIFEST, "quote.js"),
+        ):
+            with self.subTest(module=module):
+                packaged = dict.fromkeys(launchpad.RESOURCES) | {module: None}
+                launchpad.manifest_identity(manifest, packaged, previous=True)
+                with self.assertRaisesRegex(ValueError, "network access"):
+                    launchpad.manifest_identity(manifest, packaged)
         resources = dict.fromkeys(launchpad.RESOURCES) | {"news.js": None}
-        launchpad.manifest_identity(RSS_NEWS_MANIFEST, resources, previous=True)
-        with self.assertRaisesRegex(ValueError, "network access"):
-            launchpad.manifest_identity(RSS_NEWS_MANIFEST, resources)
         mixed = RSS_NEWS_MANIFEST.replace(
             b"</widget>", access(launchpad.NEWS_IMAGE_ORIGIN) + b"</widget>"
         )

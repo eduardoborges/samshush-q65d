@@ -1,15 +1,21 @@
-/* Dollar, euro and bitcoin in reais from AwesomeAPI: https://docs.awesomeapi.com.br/api-de-moedas */
+/* Dollar, euro and bitcoin in reais from AwesomeAPI: https://docs.awesomeapi.com.br/api-de-moedas
+   AwesomeAPI has no Tether (its USDT-BRL is the tourist dollar), so USDT comes from Binance's
+   public 24-hour ticker: https://developers.binance.com/docs/binance-spot-api-docs/rest-api */
 (function () {
   "use strict";
 
   var url = "https://economia.awesomeapi.com.br/json/last/USD-BRL,EUR-BRL,BTC-BRL";
+  var tetherURL = "https://api.binance.com/api/v3/ticker/24hr?symbol=USDTBRL";
   var refreshDelay = 10 * 60 * 1000;
   var requestTimeout = 15 * 1000;
   // The market closes on weekends and holidays, so a Friday quote is still the latest one on Monday.
   var maxAge = 4 * 24 * 60 * 60 * 1000;
-  // Each pair with its label, its plausible price range and how many decimals the price shows.
+  // Each pair with its label, its plausible price range and how many decimals the price shows, in
+  // list order. USDT sits under the dollar so the two are easy to compare.
+  var tether = { key: "USDTBRL", name: "USDT", low: 0, high: 100, decimals: 2 };
   var pairs = [
     { key: "USDBRL", code: "USD", name: "Dólar", low: 0, high: 100, decimals: 2 },
+    tether,
     { key: "EURBRL", code: "EUR", name: "Euro", low: 0, high: 100, decimals: 2 },
     { key: "BTCBRL", code: "BTC", name: "Bitcoin", low: 1000, high: 100000000, decimals: 0 }
   ];
@@ -19,24 +25,30 @@
   var expiryTimer = null;
   var busy = false;
   var stopped = false;
-  var lastQuotes = null;
+  // The last good quote of each pair, by key.
+  var lastQuotes = {};
 
-  function parseOne(value, pair) {
-    var quote = value && value[pair.key];
-    if (!quote || quote.code !== pair.code || quote.codein !== "BRL") return null;
-    var bid = Number(quote.bid);
-    var percent = Number(quote.pctChange);
-    var seconds = Number(quote.timestamp);
+  function reading(pair, bid, percent, time) {
     if (!Number.isFinite(bid) || bid <= pair.low || bid >= pair.high ||
         !Number.isFinite(percent) || Math.abs(percent) >= 50 ||
-        !Number.isInteger(seconds) || seconds <= 0) return null;
-    return { pair: pair, bid: bid, change: percent, time: seconds * 1000 };
+        !Number.isInteger(time) || time <= 0) return null;
+    return { pair: pair, bid: bid, change: percent, time: time };
   }
 
   // Pairs that fail validation are left out; the list hides only when none is valid.
   function parse(value) {
-    var quotes = pairs.map(function (pair) { return parseOne(value, pair); }).filter(Boolean);
+    var quotes = pairs.filter(function (pair) { return pair.code; }).map(function (pair) {
+      var quote = value && value[pair.key];
+      if (!quote || quote.code !== pair.code || quote.codein !== "BRL") return null;
+      return reading(pair, Number(quote.bid), Number(quote.pctChange), Number(quote.timestamp) * 1000);
+    }).filter(Boolean);
     return quotes.length ? quotes : null;
+  }
+
+  function parseTether(value) {
+    if (!value || value.symbol !== tether.key) return null;
+    var quote = reading(tether, Number(value.lastPrice), Number(value.priceChangePercent), value.closeTime);
+    return quote ? [quote] : null;
   }
 
   function twoDigits(value) {
@@ -74,7 +86,9 @@
 
   function render() {
     var now = Date.now();
-    var fresh = (lastQuotes || []).filter(function (quote) { return now - quote.time <= maxAge; });
+    var fresh = pairs.map(function (pair) { return lastQuotes[pair.key]; }).filter(function (quote) {
+      return quote && now - quote.time <= maxAge;
+    });
     while (list.firstChild) list.removeChild(list.firstChild);
     container.hidden = fresh.length === 0;
     window.clearTimeout(expiryTimer);
@@ -93,10 +107,10 @@
     expiryTimer = window.setTimeout(render, oldest + maxAge - now);
   }
 
-  function request() {
+  function request(address) {
     var controller = new window.AbortController();
     var timer = window.setTimeout(function () { controller.abort(); }, requestTimeout);
-    return window.fetch(url, {
+    return window.fetch(address, {
       signal: controller.signal,
       // The API allows serving a cached answer up to three days old while it revalidates,
       // which showed a stale quote after the TV was idle. Always ask the server.
@@ -114,13 +128,22 @@
     if (!stopped && !document.hidden) refreshTimer = window.setTimeout(refresh, refreshDelay);
   }
 
+  function nothing() {
+    return null;
+  }
+
   function refresh() {
     if (busy || stopped) return Promise.resolve(lastQuotes);
     busy = true;
     window.clearTimeout(refreshTimer);
-    // Keep the last good quotes when a request fails; render hides each one once it is too old.
-    return request().then(parse).catch(function () { return null; }).then(function (quotes) {
-      if (quotes) lastQuotes = quotes;
+    // Keep the last good quote of each pair when a request fails; render hides it once it is too old.
+    return Promise.all([
+      request(url).then(parse).catch(nothing),
+      request(tetherURL).then(parseTether).catch(nothing)
+    ]).then(function (results) {
+      results.forEach(function (quotes) {
+        (quotes || []).forEach(function (quote) { lastQuotes[quote.pair.key] = quote; });
+      });
       if (!stopped) render();
       busy = false;
       schedule();
@@ -140,7 +163,7 @@
     document.removeEventListener("visibilitychange", visibilityChanged);
   }
 
-  window.LauncherQuote = { parse: parse, format: format, refresh: refresh, stop: stop };
+  window.LauncherQuote = { parse: parse, parseTether: parseTether, format: format, refresh: refresh, stop: stop };
   if (!container || !list || typeof window.fetch !== "function" ||
       typeof window.AbortController !== "function") return;
   document.addEventListener("visibilitychange", visibilityChanged);

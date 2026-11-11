@@ -24,6 +24,15 @@ function payload(overrides = {}) {
   }, overrides);
 }
 
+function ticker(overrides = {}) {
+  return Object.assign({
+    symbol: "USDTBRL",
+    lastPrice: "5.56210000",
+    priceChangePercent: "0.619",
+    closeTime: new Date(2026, 10, 11, 9, 29).getTime()
+  }, overrides);
+}
+
 function element(id) {
   const node = { id, hidden: id === "market", textContent: "", className: "", children: [] };
   node.appendChild = child => { node.children.push(child); return child; };
@@ -32,7 +41,8 @@ function element(id) {
   return node;
 }
 
-function createQuote(responses) {
+// Answers for each API, in request order.
+function createQuote(awesome, tether = [ticker()]) {
   const elements = { market: element("market"), "market-list": element("market-list") };
   const timers = new Map();
   let timerID = 0;
@@ -47,7 +57,7 @@ function createQuote(responses) {
   const window = {
     fetch(url, options) {
       requests.push({ url, options });
-      const next = responses.shift();
+      const next = (url.startsWith("https://api.binance.com/") ? tether : awesome).shift();
       if (next instanceof Error) return Promise.reject(next);
       return Promise.resolve({ ok: true, json: () => Promise.resolve(next) });
     },
@@ -68,22 +78,54 @@ function createQuote(responses) {
 const settle = () => new Promise(resolve => setImmediate(resolve));
 const rows = h => h.elements["market-list"].children.map(row => row.children.map(cell => cell.textContent));
 
-test("lists the dollar, the euro and bitcoin in reais with change and time", async () => {
+test("lists the dollar, USDT, the euro and bitcoin in reais with change and time", async () => {
   const h = createQuote([payload()]);
   await settle();
-  assert.equal(h.requests[0].url, "https://economia.awesomeapi.com.br/json/last/USD-BRL,EUR-BRL,BTC-BRL");
-  assert.equal(h.requests[0].options.credentials, "omit");
-  assert.equal(h.requests[0].options.cache, "no-cache");
+  assert.deepEqual(h.requests.map(request => request.url), [
+    "https://economia.awesomeapi.com.br/json/last/USD-BRL,EUR-BRL,BTC-BRL",
+    "https://api.binance.com/api/v3/ticker/24hr?symbol=USDTBRL"
+  ]);
+  for (const request of h.requests) {
+    assert.equal(request.options.credentials, "omit");
+    assert.equal(request.options.cache, "no-cache");
+  }
   assert.equal(h.elements.market.hidden, false);
   assert.deepEqual(rows(h), [
     ["Dólar", "R$ 5,58", "+1,35%", "10/11 19:05"],
+    ["USDT", "R$ 5,56", "+0,62%", "09:29"],
     ["Euro", "R$ 6,23", "−0,03%", "09:11"],
     ["Bitcoin", "R$ 410.824", "0,00%", "09:28"]
   ]);
   assert.deepEqual(h.elements["market-list"].children[0].children.map(cell => cell.className),
     ["market-name", "market-price", "market-change up", "market-time"]);
-  assert.equal(h.elements["market-list"].children[1].children[2].className, "market-change down");
-  assert.equal(h.elements["market-list"].children[2].children[2].className, "market-change flat");
+  assert.equal(h.elements["market-list"].children[2].children[2].className, "market-change down");
+  assert.equal(h.elements["market-list"].children[3].children[2].className, "market-change flat");
+});
+
+test("either source can fail without hiding the other", async () => {
+  const noTether = createQuote([payload()], [new Error("offline")]);
+  await settle();
+  assert.deepEqual(rows(noTether).map(row => row[0]), ["Dólar", "Euro", "Bitcoin"]);
+  const onlyTether = createQuote([new Error("offline")]);
+  await settle();
+  assert.deepEqual(rows(onlyTether).map(row => row[0]), ["USDT"]);
+});
+
+test("rejects a ticker for another pair or with implausible numbers", () => {
+  const { quote } = createQuote([new Error("offline")], [new Error("offline")]);
+  assert.equal(quote.parseTether(ticker()).length, 1);
+  for (const broken of [
+    null,
+    ticker({ symbol: "BTCBRL" }),
+    ticker({ lastPrice: "abc" }),
+    ticker({ lastPrice: "0" }),
+    ticker({ lastPrice: "500" }),
+    ticker({ priceChangePercent: "80" }),
+    ticker({ closeTime: "soon" }),
+    ticker({ closeTime: 1.5 })
+  ]) {
+    assert.equal(quote.parseTether(broken), null);
+  }
 });
 
 test("leaves out an implausible pair and rejects a payload with none", () => {
@@ -108,21 +150,21 @@ test("leaves out an implausible pair and rejects a payload with none", () => {
 });
 
 test("keeps the last quotes when a refresh fails and drops each one after four days", async () => {
-  const h = createQuote([payload(), new Error("offline")]);
+  const h = createQuote([payload(), new Error("offline")], [ticker(), new Error("offline")]);
   await settle();
   await h.quote.refresh();
-  assert.equal(rows(h).length, 3);
+  assert.equal(rows(h).length, 4);
 
   const expiry = [...h.timers.values()].find(timer => timer.callback.name === "render");
   assert.equal(expiry.delay, new Date(2026, 10, 10, 19, 5).getTime() + 4 * DAY - NOW);
   h.clock.now = new Date(2026, 10, 10, 19, 5).getTime() + 4 * DAY + 1;
   expiry.callback();
-  assert.deepEqual(rows(h).map(row => row[0]), ["Euro", "Bitcoin"]);
+  assert.deepEqual(rows(h).map(row => row[0]), ["USDT", "Euro", "Bitcoin"]);
 
   const old = new Date(NOW - 5 * DAY);
   const stale = createQuote([payload({
     USDBRL: pair("USD", "5.5", "1", old), EURBRL: pair("EUR", "6.2", "1", old), BTCBRL: pair("BTC", "400000", "1", old)
-  })]);
+  })], [ticker({ closeTime: old.getTime() })]);
   await settle();
   assert.equal(stale.elements.market.hidden, true);
 });

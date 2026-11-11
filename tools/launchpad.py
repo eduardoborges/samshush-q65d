@@ -40,20 +40,24 @@ RESOURCES = WEATHER_RESOURCES + ("time-controls.js",)
 WEATHER_CONFIG = "weather-config.json"
 WEATHER_ORIGIN = "https://api.open-meteo.com"
 QUOTE_ORIGIN = "https://economia.awesomeapi.com.br"
+TETHER_ORIGIN = "https://api.binance.com"
 MARINE_ORIGIN = "https://marine-api.open-meteo.com"
 NEWS_ORIGIN = "https://falkor-cda.bastian.globo.com"
 NEWS_IMAGE_ORIGIN = "https://s2-g1.glbimg.com"
 # Modules a layout may add beyond the Frame resources, each with the only origins it
 # unlocks. An empty tuple marks a module that makes no network requests.
 LAYOUT_EXTRAS = {
-    "quote.js": (QUOTE_ORIGIN,),
+    "quote.js": (QUOTE_ORIGIN, TETHER_ORIGIN),
     "sea.js": (MARINE_ORIGIN,),
     "forecast.js": (WEATHER_ORIGIN,),
     "news.js": (NEWS_ORIGIN, NEWS_IMAGE_ORIGIN),
     "moon.js": (),
 }
 # Origins a module unlocked in an earlier release, accepted only in a previous widget.
-RETIRED_ORIGINS = {"news.js": ("https://g1.globo.com",)}
+RETIRED_ORIGINS = {
+    "quote.js": (QUOTE_ORIGIN,),
+    "news.js": ("https://g1.globo.com",),
+}
 LEGACY_RESOURCES = tuple(name for name in WEATHER_RESOURCES if name != "weather.js")
 SIGNATURES = ("author-signature.xml", "signature1.xml")
 PRIVILEGES = {
