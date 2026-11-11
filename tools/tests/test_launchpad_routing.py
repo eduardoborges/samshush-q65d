@@ -193,6 +193,29 @@ class RoutingEvidenceTests(unittest.TestCase):
             ):
                 routing.render_audit(build, package)
 
+    def test_journal_scripts_read_or_rename_only_the_verified_journal(self):
+        read = routing.journal_script()
+        self.assertIn("LAUNCHPAD_JOURNAL_RAW", read)
+        self.assertNotIn("mv --", read)
+        archive = routing.journal_script(digest="e" * 64, stamp="20261111T034500Z")
+        self.assertIn(f"[[ $digest == {'e' * 64} ]]", archive)
+        self.assertIn(f"{routing.JOURNAL}.archived-20261111T034500Z", archive)
+        for script in (read, archive):
+            self.assertNotIn("rm ", script)
+            subprocess.run(
+                ["bash", "-n"], input=script, text=True, check=True, capture_output=True
+            )
+        for options in (
+            {"digest": "e" * 64},
+            {"stamp": "20261111T034500Z"},
+            {"digest": "E" * 64, "stamp": "20261111T034500Z"},
+            {"digest": "e" * 64, "stamp": "now; reboot"},
+        ):
+            with self.subTest(options=options), self.assertRaises(ValueError):
+                routing.journal_script(**options)
+        with self.assertRaises(ValueError):
+            routing.journal_script("T-X; id")
+
     def test_all_rendered_operations_have_valid_bash_syntax(self):
         for operation in ("query", "apply", "status", "restore"):
             args = (

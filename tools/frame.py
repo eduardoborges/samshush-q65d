@@ -457,6 +457,7 @@ def main():
             "activate",
             "status",
             "restore",
+            "archive",
         ),
     )
     launchpad.add_argument(

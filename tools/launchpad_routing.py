@@ -225,6 +225,66 @@ registered=$(sqlite3 -readonly /opt/dbspace/.pkgmgr_parser.db "SELECT count(*) F
     return script
 
 
+JOURNAL_SCRIPT = r"""set -euo pipefail
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export LC_ALL=C
+umask 077
+[[ $(id -u) == 0 ]]
+grep -Fxq BUILD_ID=@@BUILD@@ /etc/os-release
+lock=/run/frame-runtime-v1.lock
+state=@@JOURNAL@@
+mkdir -m 700 "$lock" || { echo 'Another operation may be running' >&2; exit 1; }
+trap 'rmdir "$lock"' EXIT
+[[ -d $state && ! -L $state && $(stat -c '%u:%a' "$state") == 0:700 ]]
+shopt -s nullglob dotglob
+entries=("$state"/*)
+[[ ${#entries[@]} == 1 && ${entries[0]} == "$state/state.json" ]]
+receipt=$state/state.json
+[[ -f $receipt && ! -L $receipt && $(stat -c '%u:%a' "$receipt") == 0:600 && $(stat -c %s "$receipt") -le 16384 ]]
+digest=$(sha256sum "$receipt" | cut -d ' ' -f 1)
+@@ACTION@@
+"""
+READ_ACTION = r"""printf 'LAUNCHPAD_JOURNAL_SHA256 %s\n' "$digest"
+printf 'LAUNCHPAD_JOURNAL_RAW %s\n' "$(base64 < "$receipt" | tr -d '\n')"
+"""
+ARCHIVE_ACTION = r"""[[ $digest == @@DIGEST@@ ]] || { echo 'Journal changed since it was verified' >&2; exit 1; }
+target=@@TARGET@@
+[[ ! -e $target && ! -L $target ]]
+mv -- "$state" "$target"
+sync
+[[ ! -e $state && -d $target && ! -L $target ]]
+printf 'LAUNCHPAD_JOURNAL_ARCHIVED %s\n' "$target"
+"""
+
+
+def journal_script(build=BUILD, *, digest=None, stamp=None):
+    """Read the committed Home journal, or rename those exact bytes out of the way.
+
+    Activation refuses any existing journal, so a verified restore is archived
+    beside it instead of deleted.
+    """
+    if re.fullmatch(BUILD_PATTERN, build) is None:
+        raise ValueError("Unexpected build identifier")
+    if digest is None and stamp is None:
+        action = READ_ACTION
+    elif (
+        isinstance(digest, str)
+        and re.fullmatch(r"[0-9a-f]{64}", digest) is not None
+        and isinstance(stamp, str)
+        and re.fullmatch(r"[0-9]{8}T[0-9]{6}Z", stamp) is not None
+    ):
+        action = ARCHIVE_ACTION.replace("@@DIGEST@@", digest).replace(
+            "@@TARGET@@", shlex.quote(f"{JOURNAL}.archived-{stamp}")
+        )
+    else:
+        raise ValueError("Archiving needs the verified journal digest and a UTC stamp")
+    return (
+        JOURNAL_SCRIPT.replace("@@BUILD@@", shlex.quote(build))
+        .replace("@@JOURNAL@@", shlex.quote(JOURNAL))
+        .replace("@@ACTION@@", action)
+    )
+
+
 def parse_output(output, build=BUILD):
     rows = [
         line.removeprefix("LAUNCHPAD_ROUTING_JSON=")

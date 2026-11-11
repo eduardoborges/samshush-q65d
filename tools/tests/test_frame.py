@@ -78,6 +78,7 @@ class HostTests(unittest.TestCase):
             "install",
             "update",
             "activate",
+            "archive",
         ):
             arguments = ["frame.py", "--tv", "192.0.2.1", "launchpad", operation]
             if operation in ("install", "update", "activate"):

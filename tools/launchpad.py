@@ -786,6 +786,41 @@ echo LAUNCHPAD_UPLOAD_CLEANED
             print(
                 "Original Home assignment restored; the shortcut app remains installed."
             )
+        elif args.operation == "archive":
+            if before["phase"] not in {"restored", "rolled-back"}:
+                raise ValueError(
+                    "Only a restored or rolled-back Home journal can be archived"
+                )
+            output = execute(launchpad_routing.journal_script(target.build))
+            digest = home_layout.marker(output, "LAUNCHPAD_JOURNAL_SHA256")
+            raw = base64.b64decode(
+                home_layout.marker(output, "LAUNCHPAD_JOURNAL_RAW"), validate=True
+            )
+            if (
+                hashlib.sha256(raw).hexdigest() != digest
+                or json.loads(raw) != before["receipt"]
+            ):
+                raise ValueError("Saved journal differs from the verified receipt")
+            evidence["archived_journal"] = {
+                "sha256": digest,
+                "raw": base64.b64encode(raw).decode(),
+            }
+            save()
+            stamp = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%SZ")
+            output = execute(
+                launchpad_routing.journal_script(
+                    target.build, digest=digest, stamp=stamp
+                )
+            )
+            evidence["archived_journal"]["path"] = home_layout.marker(
+                output, "LAUNCHPAD_JOURNAL_ARCHIVED"
+            )
+            evidence["after"] = routing("query")
+            if evidence["after"]["phase"] != "absent":
+                raise ValueError("Home journal is still present after archiving")
+            print(
+                "Restored Home journal archived on the TV and saved in this report; activation is available again."
+            )
         else:
             print("Home routing journal:", before["phase"])
         evidence["completed"] = True

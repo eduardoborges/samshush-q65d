@@ -654,6 +654,7 @@ class LaunchpadDeviceTests(unittest.TestCase):
         self.installed_weather = b"{}\n"
         self.bad_probe = False
         self.bad_routing = False
+        self.journal_raw = None
         self.fake_frame = SimpleNamespace(
             ASSETS=self.assets,
             policy=lambda: {"build": home.BUILD, "model": home.MODEL},
@@ -748,6 +749,19 @@ class LaunchpadDeviceTests(unittest.TestCase):
                     )
             elif "LAUNCHPAD_PACKAGE_COUNT" in script:
                 output = f"LAUNCHPAD_PACKAGE_COUNT {self.registration_count}\nLAUNCHPAD_APP_COUNT {self.registration_count}\n"
+            elif "LAUNCHPAD_JOURNAL_ARCHIVED" in script:
+                output = "LAUNCHPAD_JOURNAL_ARCHIVED /opt/usr/share/samshush-home-v1.archived-fixture\n"
+                self.initial_phase = "absent"
+            elif "LAUNCHPAD_JOURNAL_RAW" in script:
+                raw = self.journal_raw
+                if raw is None:
+                    status = self.route_output("status").split("\n")[0]
+                    receipt = json.loads(status.removeprefix("LAUNCHPAD_ROUTING_JSON="))
+                    raw = json.dumps(receipt["receipt"]).encode()
+                output = (
+                    f"LAUNCHPAD_JOURNAL_SHA256 {hashlib.sha256(raw).hexdigest()}\n"
+                    f"LAUNCHPAD_JOURNAL_RAW {base64.b64encode(raw).decode()}\n"
+                )
             elif "LAUNCHPAD_UPLOAD_CLEANED" in script:
                 output = "LAUNCHPAD_UPLOAD_CLEANED\n"
             elif "LAUNCHPAD_UPLOAD_VERIFIED" in script:
@@ -845,6 +859,44 @@ class LaunchpadDeviceTests(unittest.TestCase):
         }
         self.fake_frame.policy = lambda: policy
         return policy
+
+    def test_archive_saves_and_moves_only_a_verified_restored_journal(self):
+        self.initial_phase = "restored"
+        result, evidence = self.run_operation("archive")
+        self.assertEqual(result, 0, evidence)
+        self.assertEqual(self.routing_calls, [("status", {}), ("query", {})])
+        read, archive = self.device_scripts[1:3]
+        self.assertIn("LAUNCHPAD_JOURNAL_RAW", read)
+        self.assertNotIn("mv --", read)
+        saved = evidence["archived_journal"]
+        raw = base64.b64decode(saved["raw"])
+        self.assertEqual(json.loads(raw)["Phase"], "restored")
+        self.assertIn(f"[[ $digest == {saved['sha256']} ]]", archive)
+        self.assertEqual(hashlib.sha256(raw).hexdigest(), saved["sha256"])
+        self.assertTrue(
+            saved["path"].startswith(launchpad_routing.JOURNAL + ".archived-")
+        )
+        self.assertEqual(evidence["after"]["phase"], "absent")
+        self.assertEqual(self.sdk_calls, [])
+
+    def test_archive_refuses_an_active_or_missing_journal(self):
+        for phase in ("applied", "absent"):
+            with self.subTest(phase=phase):
+                self.setUp()
+                self.initial_phase = phase
+                result, evidence = self.run_operation("archive")
+                self.assertEqual(result, 1)
+                self.assertFalse(
+                    any("LAUNCHPAD_JOURNAL" in script for script in self.device_scripts)
+                )
+
+    def test_archive_stops_when_the_saved_journal_differs(self):
+        self.initial_phase = "restored"
+        self.journal_raw = b'{"Phase":"restored"}'
+        result, evidence = self.run_operation("archive")
+        self.assertEqual(result, 1)
+        self.assertIn("differs", evidence["error"])
+        self.assertFalse(any("mv --" in script for script in self.device_scripts))
 
     def test_frame_target_keeps_upstream_build_helper_and_model(self):
         result, evidence = self.run_operation("inspect")

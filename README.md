@@ -133,7 +133,7 @@ Optionally replace the default SmartHub noise with a custom home screen
 - Build with `uv run --project tools tools/launchpad.py --sdk /path/to/tizen-studio --profile Samshush --output .local/launchpad-build`. Add `--weather-postcode "$TV_WEATHER_POSTCODE"` for Celsius weather and today's forecast; your location stays in private build files.
 - On the Q65D, build with `--layout q65d-2123` and put `--profile q65d-2123` before the `frame.py` command. That layout has YouTube, Stremio and Settings. Installation and Home assignment have not been tested on that TV yet.
 - Use `frame.py launchpad install --widget .local/launchpad-build/Shortcuts.wgt`, then `launchpad launch`. Check Apple TV, Settings, Art Mode and Back before assigning Home.
-- Run `launchpad activate --widget .local/launchpad-build/Shortcuts.wgt` to assign the Home button. `launchpad restore` returns it to Samsung Home. See [AGENTS.md](AGENTS.md#home-screen-optional) for complete commands, updates and recovery.
+- Run `launchpad activate --widget .local/launchpad-build/Shortcuts.wgt` to assign the Home button. `launchpad restore` returns it to Samsung Home; run `launchpad archive` before activating again. See [AGENTS.md](AGENTS.md#home-screen-optional) for complete commands, updates and recovery.
 
 ## Art quiet hours (optional)
 

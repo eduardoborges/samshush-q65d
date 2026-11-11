@@ -233,6 +233,7 @@ uses the existing operation lock, and rolls back partial failures. It preserves
 the overlay/first-screen/startup/backup values and Auto Start. Never enroll this
 in the privacy boot hook. Restore refuses unrelated drift and retains recovery
 evidence; incomplete transactions can be restored without a passing status first.
+`launchpad archive` renames a restored or rolled-back journal to `samshush-home-v1.archived-UTC`. It first rereads the journal under the operation lock, checks that its bytes match the verified receipt and saves them in the local report. Activation refuses any existing journal, so archive a verified restore before activating again.
 
 The web app uses public HDMI discovery/selection and the native TV viewer.
 Settings launches `org.tizen.menu` with the exact native `Entry=s/setting`
