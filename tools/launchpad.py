@@ -40,8 +40,9 @@ RESOURCES = WEATHER_RESOURCES + ("time-controls.js",)
 WEATHER_CONFIG = "weather-config.json"
 WEATHER_ORIGIN = "https://api.open-meteo.com"
 QUOTE_ORIGIN = "https://economia.awesomeapi.com.br"
+MARINE_ORIGIN = "https://marine-api.open-meteo.com"
 # Modules a layout may add beyond the Frame resources; each one unlocks only its own origin.
-LAYOUT_EXTRAS = ("quote.js",)
+LAYOUT_EXTRAS = {"quote.js": QUOTE_ORIGIN, "sea.js": MARINE_ORIGIN}
 LEGACY_RESOURCES = tuple(name for name in WEATHER_RESOURCES if name != "weather.js")
 SIGNATURES = ("author-signature.xml", "signature1.xml")
 PRIVILEGES = {
@@ -169,8 +170,9 @@ def manifest_identity(data, resources=RESOURCES):
     origins = set()
     if "weather.js" in resources:
         origins.add(WEATHER_ORIGIN)
-    if "quote.js" in resources:
-        origins.add(QUOTE_ORIGIN)
+    origins.update(
+        origin for name, origin in LAYOUT_EXTRAS.items() if name in resources
+    )
     valid_access = (
         len(access) == len(origins)
         and {node.get("origin") for node in access} == origins
@@ -183,7 +185,8 @@ def manifest_identity(data, resources=RESOURCES):
     )
     if not valid_access:
         raise ValueError(
-            "Launcher network access must be limited to the weather and quote APIs"
+            "Launcher network access must be limited to the weather API and "
+            "the origins of packaged layout modules"
         )
     if any(
         widget.findall(tag)
@@ -319,10 +322,11 @@ def signed_widget_resources(path, source=SOURCE, *, previous=False, layout=None)
                 WEATHER_CONFIG,
             )
             if previous:
+                extras = tuple(name for name in LAYOUT_EXTRAS if name in names)
                 for old in (
                     LEGACY_RESOURCES,
                     WEATHER_RESOURCES + (WEATHER_CONFIG,),
-                    RESOURCES + LAYOUT_EXTRAS + (WEATHER_CONFIG,),
+                    RESOURCES + extras + (WEATHER_CONFIG,),
                 ):
                     if set(names) == set(old + SIGNATURES):
                         resources = old

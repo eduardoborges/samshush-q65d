@@ -48,6 +48,11 @@ QUOTE_MANIFEST = MANIFEST.replace(
     b'<access origin="https://api.open-meteo.com" subdomains="false"/>\n'
     b'<access origin="https://economia.awesomeapi.com.br" subdomains="false"/>\n',
 )
+SEA_MANIFEST = QUOTE_MANIFEST.replace(
+    b'<access origin="https://economia.awesomeapi.com.br" subdomains="false"/>\n',
+    b'<access origin="https://economia.awesomeapi.com.br" subdomains="false"/>\n'
+    b'<access origin="https://marine-api.open-meteo.com" subdomains="false"/>\n',
+)
 DIGESTS = {
     "sha256": "http://www.w3.org/2001/04/xmlenc#sha256",
     "sha512": "http://www.w3.org/2001/04/xmlenc#sha512",
@@ -170,6 +175,58 @@ class LaunchpadTests(unittest.TestCase):
         ):
             with self.subTest(manifest=manifest), self.assertRaises(ValueError):
                 launchpad.manifest_identity(manifest, resources | {"quote.js": None})
+
+    def test_each_layout_module_unlocks_only_its_own_origin(self):
+        resources = dict.fromkeys(launchpad.RESOURCES)
+        both = resources | {"quote.js": None, "sea.js": None}
+        launchpad.manifest_identity(SEA_MANIFEST, both)
+        for packaged in (
+            resources,
+            resources | {"quote.js": None},
+            resources | {"sea.js": None},
+        ):
+            with self.subTest(packaged=sorted(set(packaged) - set(resources))):
+                with self.assertRaisesRegex(ValueError, "network access"):
+                    launchpad.manifest_identity(SEA_MANIFEST, packaged)
+        with self.assertRaisesRegex(ValueError, "network access"):
+            launchpad.manifest_identity(QUOTE_MANIFEST, both)
+        with self.assertRaisesRegex(ValueError, "network access"):
+            launchpad.manifest_identity(
+                SEA_MANIFEST.replace(b"marine-api.open-meteo.com", b"example.com"),
+                both,
+            )
+
+    def test_sea_module_is_packaged_and_verified_with_the_quote_module(self):
+        layout = self.quote_layout()
+        (layout / "config.xml").write_bytes(SEA_MANIFEST)
+        (layout / "sea.js").write_bytes(b"window.testSea = true;")
+        self.resources["config.xml"] = SEA_MANIFEST
+        self.resources["sea.js"] = b"window.testSea = true;"
+        files = launchpad.source_files(self.source, layout)
+        self.assertEqual(files["sea.js"], b"window.testSea = true;")
+        write_widget(self.widget, signed_members(self.resources))
+        self.assertEqual(
+            launchpad.verify_widget(self.widget, self.source, layout).app,
+            "Gxqk7W2na5.Shortcuts",
+        )
+
+    def test_previous_widgets_may_carry_any_subset_of_layout_modules(self):
+        quote_only = self.resources | {
+            "config.xml": QUOTE_MANIFEST,
+            "quote.js": b"window.testQuote = true;",
+        }
+        both = quote_only | {
+            "config.xml": SEA_MANIFEST,
+            "sea.js": b"window.testSea = true;",
+        }
+        for resources in (quote_only, both):
+            with self.subTest(names=sorted(resources)):
+                write_widget(self.widget, signed_members(resources))
+                files = launchpad.signed_widget_resources(self.widget, previous=True)[1]
+                self.assertEqual(
+                    {name for name in launchpad.LAYOUT_EXTRAS if name in files},
+                    {name for name in launchpad.LAYOUT_EXTRAS if name in resources},
+                )
 
     def test_layout_extras_cannot_be_symlinks(self):
         layout = self.quote_layout()
