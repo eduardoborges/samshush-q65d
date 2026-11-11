@@ -41,11 +41,15 @@ WEATHER_CONFIG = "weather-config.json"
 WEATHER_ORIGIN = "https://api.open-meteo.com"
 QUOTE_ORIGIN = "https://economia.awesomeapi.com.br"
 MARINE_ORIGIN = "https://marine-api.open-meteo.com"
-# Modules a layout may add beyond the Frame resources; each one unlocks only its own origin.
+NEWS_ORIGIN = "https://g1.globo.com"
+# Modules a layout may add beyond the Frame resources; each one unlocks only its own
+# origin, and None marks a module that makes no network requests.
 LAYOUT_EXTRAS = {
     "quote.js": QUOTE_ORIGIN,
     "sea.js": MARINE_ORIGIN,
     "forecast.js": WEATHER_ORIGIN,
+    "news.js": NEWS_ORIGIN,
+    "moon.js": None,
 }
 LEGACY_RESOURCES = tuple(name for name in WEATHER_RESOURCES if name != "weather.js")
 SIGNATURES = ("author-signature.xml", "signature1.xml")
@@ -175,7 +179,9 @@ def manifest_identity(data, resources=RESOURCES):
     if "weather.js" in resources:
         origins.add(WEATHER_ORIGIN)
     origins.update(
-        origin for name, origin in LAYOUT_EXTRAS.items() if name in resources
+        origin
+        for name, origin in LAYOUT_EXTRAS.items()
+        if origin is not None and name in resources
     )
     valid_access = (
         len(access) == len(origins)

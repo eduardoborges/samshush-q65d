@@ -190,8 +190,21 @@ class LaunchpadTests(unittest.TestCase):
                     launchpad.manifest_identity(SEA_MANIFEST, packaged)
         with self.assertRaisesRegex(ValueError, "network access"):
             launchpad.manifest_identity(QUOTE_MANIFEST, both)
-        # The forecast module shares the weather origin every launcher already allows.
-        launchpad.manifest_identity(MANIFEST, resources | {"forecast.js": None})
+        # The forecast module shares the weather origin every launcher already allows,
+        # and the moon module makes no requests at all.
+        launchpad.manifest_identity(
+            MANIFEST, resources | {"forecast.js": None, "moon.js": None}
+        )
+        news = MANIFEST.replace(
+            b'<access origin="https://api.open-meteo.com" subdomains="false"/>\n',
+            b'<access origin="https://api.open-meteo.com" subdomains="false"/>\n'
+            b'<access origin="https://g1.globo.com" subdomains="false"/>\n',
+        )
+        launchpad.manifest_identity(news, resources | {"news.js": None})
+        with self.assertRaisesRegex(ValueError, "network access"):
+            launchpad.manifest_identity(news, resources)
+        with self.assertRaisesRegex(ValueError, "network access"):
+            launchpad.manifest_identity(MANIFEST, resources | {"news.js": None})
         with self.assertRaisesRegex(ValueError, "network access"):
             launchpad.manifest_identity(
                 SEA_MANIFEST.replace(b"marine-api.open-meteo.com", b"example.com"),
