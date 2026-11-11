@@ -116,7 +116,17 @@ def validate_identity(package_id, app_id):
     return package_id, app_id
 
 
-def build_helper(dotnet, output):
+def source_for(build):
+    """The helper writes its build into the recovery receipt, so each build needs its own binary."""
+    if re.fullmatch(BUILD_PATTERN, build) is None:
+        raise ValueError("Unexpected build identifier")
+    constant = f'const string Build = "{BUILD}";'
+    if SOURCE.count(constant) != 1:
+        raise ValueError("Helper source no longer has one build constant")
+    return SOURCE.replace(constant, f'const string Build = "{build}";')
+
+
+def build_helper(dotnet, output, build=BUILD):
     """Build in a fresh directory using the existing pinned SDK; never contact a TV."""
     output = Path(output)
     env = os.environ | {
@@ -133,7 +143,7 @@ def build_helper(dotnet, output):
     if version != "6.0.428":
         raise ValueError(f"Expected .NET SDK 6.0.428, got {version}")
     output.mkdir(parents=True, exist_ok=False)
-    (output / f"{NAME}.cs").write_text(SOURCE)
+    (output / f"{NAME}.cs").write_text(source_for(build))
     (output / f"{NAME}.csproj").write_text(PROJECT)
     (output / "NuGet.Config").write_text(
         "<configuration><packageSources><clear/></packageSources></configuration>"
@@ -161,7 +171,9 @@ def build_helper(dotnet, output):
     }
 
 
-def render_script(operation, artifacts, *, package_id=None, app_id=None):
+def render_script(
+    operation, artifacts, *, package_id=None, app_id=None, build=BUILD, hashes=HASHES
+):
     """Render one fixed operation. Caller must verify the model and signed widget."""
     if operation not in {"query", "apply", "status", "restore"}:
         raise ValueError("Unknown Home-routing operation")
@@ -169,6 +181,14 @@ def render_script(operation, artifacts, *, package_id=None, app_id=None):
         validate_identity(package_id, app_id)
     elif package_id is not None or app_id is not None:
         raise ValueError("Only apply accepts a target identity")
+    if re.fullmatch(BUILD_PATTERN, build) is None:
+        raise ValueError("Unexpected build identifier")
+    # The helper imports exactly these libraries. Profile digests end up in the shell script.
+    if set(hashes) != set(HASHES) or any(
+        not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None
+        for digest in hashes.values()
+    ):
+        raise ValueError("Unexpected Home-routing library pins")
     staging = []
     for suffix in (".dll", ".runtimeconfig.json"):
         data = artifacts[suffix]
@@ -190,9 +210,9 @@ registered=$(sqlite3 -readonly /opt/dbspace/.pkgmgr_parser.db "SELECT count(*) F
 [[ -d /opt/usr/apps/{package_id} && ! -L /opt/usr/apps/{package_id} ]]
 """
     replacements = {
-        "@@BUILD@@": shlex.quote(BUILD),
+        "@@BUILD@@": shlex.quote(build),
         "@@JOURNAL@@": shlex.quote(JOURNAL),
-        "@@HASHES@@": "\n".join(f"{digest}  {path}" for path, digest in HASHES.items()),
+        "@@HASHES@@": "\n".join(f"{digest}  {path}" for path, digest in hashes.items()),
         "@@STAGING@@": "\n".join(staging),
         "@@REGISTRATION@@": registration,
         "@@ARGS@@": " ".join(
@@ -205,7 +225,7 @@ registered=$(sqlite3 -readonly /opt/dbspace/.pkgmgr_parser.db "SELECT count(*) F
     return script
 
 
-def parse_output(output):
+def parse_output(output, build=BUILD):
     rows = [
         line.removeprefix("LAUNCHPAD_ROUTING_JSON=")
         for line in output.splitlines()
@@ -262,7 +282,7 @@ def parse_output(output):
             != {"Version", "Build", "Package", "App", "Phase", "Original"}
             or type(receipt["Version"]) is not int
             or receipt["Version"] != 1
-            or receipt["Build"] != BUILD
+            or receipt["Build"] != build
             or not isinstance(receipt["Phase"], str)
             or receipt["Phase"] not in PHASES
             or receipt["Phase"] != result["phase"]

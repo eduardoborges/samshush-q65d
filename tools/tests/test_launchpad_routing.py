@@ -120,6 +120,60 @@ class RoutingEvidenceTests(unittest.TestCase):
             with self.subTest(value=type(value)), self.assertRaises(ValueError):
                 routing.render_script("query", artifacts | {".dll": value})
 
+    def test_other_builds_get_their_own_helper_source_and_pins(self):
+        build = "T-NKLDUABC-0090-REL-202603190159"
+        source = routing.source_for(build)
+        self.assertEqual(routing.source_for(routing.BUILD), routing.SOURCE)
+        self.assertEqual(source.count(build), 1)
+        self.assertNotIn(routing.BUILD, source)
+        self.assertEqual(
+            source.replace(build, routing.BUILD),
+            routing.SOURCE,
+            "only the build differs",
+        )
+        for invalid in ("", "T-X; rm -rf /", routing.BUILD + "\n"):
+            with self.subTest(build=invalid), self.assertRaises(ValueError):
+                routing.source_for(invalid)
+        hashes = {path: "a" * 64 for path in routing.HASHES}
+        script = routing.render_script(
+            "query",
+            {".dll": b"dll", ".runtimeconfig.json": b"{}"},
+            build=build,
+            hashes=hashes,
+        )
+        self.assertIn(f"BUILD_ID={build}", script)
+        self.assertNotIn(routing.BUILD, script)
+        for path in routing.HASHES:
+            self.assertIn(f"{'a' * 64}  {path}", script)
+
+    def test_library_pins_must_cover_the_imported_libraries_with_digests(self):
+        artifacts = {".dll": b"dll", ".runtimeconfig.json": b"{}"}
+        complete = {path: "b" * 64 for path in routing.HASHES}
+        missing = dict(list(complete.items())[1:])
+        extra = complete | {"/usr/lib/libother.so.0": "c" * 64}
+        for hashes in (
+            missing,
+            extra,
+            complete | {"/usr/lib/libaul.so.0": "B" * 64},
+            complete | {"/usr/lib/libaul.so.0": "b" * 64 + "\nid"},
+        ):
+            with self.subTest(hashes=hashes), self.assertRaises(ValueError):
+                routing.render_script("query", artifacts, hashes=hashes)
+        with self.assertRaises(ValueError):
+            routing.render_script("query", artifacts, build="T-X'; reboot; '")
+
+    def test_receipt_must_match_the_selected_build(self):
+        build = "T-NKLDUABC-0090-REL-202603190159"
+        value = evidence()
+        with self.assertRaises(ValueError):
+            routing.parse_output(output(value), build=build)
+        value["receipt"]["Build"] = build
+        self.assertEqual(
+            routing.parse_output(output(value), build=build)["phase"], "applied"
+        )
+        with self.assertRaises(ValueError):
+            routing.parse_output(output(value))
+
     def test_audit_is_read_only_and_checks_the_profile_build(self):
         build = "T-NKLDUABC-0090-REL-202603190159"
         script = routing.render_audit(build, "Gxqk7W2na5")

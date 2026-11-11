@@ -152,7 +152,7 @@ def read_layout(output):
     return value
 
 
-def verify_model(tv):
+def verify_model(tv, model=MODEL):
     connection = http.client.HTTPConnection(str(tv), 8001, timeout=5)
     try:
         connection.request("GET", "/api/v2/", headers={"Cache-Control": "no-cache"})
@@ -164,9 +164,9 @@ def verify_model(tv):
         if (
             not isinstance(identity, dict)
             or not isinstance(identity.get("device"), dict)
-            or identity["device"].get("modelName") != MODEL
+            or identity["device"].get("modelName") != model
         ):
-            raise ValueError(f"Expected Samsung TV model {MODEL}")
+            raise ValueError(f"Expected Samsung TV model {model}")
     finally:
         connection.close()
 

@@ -22,6 +22,9 @@ import home  # noqa: E402
 import launchpad  # noqa: E402
 import launchpad_routing  # noqa: E402
 
+Q65D_BUILD = "T-NKLDUABC-0090-REL-202603190159"
+Q65D_HASHES = {path: "d" * 64 for path in launchpad_routing.HASHES}
+
 WEATHER_MANIFEST = b"""<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="https://example.invalid/shortcuts" version="0.2.0">
 <tizen:application package="Gxqk7W2na5" id="Gxqk7W2na5.Shortcuts" required_version="9.0"/>
 <content src="index.html"/>
@@ -421,7 +424,19 @@ class LaunchpadTests(unittest.TestCase):
                     Path("build").resolve(),
                     cli=path if option == "--cli" else None,
                     weather_postcode=None,
+                    layout=None,
                 )
+            for layout in ("missing", "../launcher", "Q65D"):
+                with (
+                    self.subTest(layout=layout),
+                    patch.object(
+                        sys, "argv", common + ["--sdk", "tool", "--layout", layout]
+                    ),
+                    contextlib.redirect_stderr(io.StringIO()),
+                    self.assertRaises(SystemExit) as result,
+                ):
+                    launchpad.main()
+                self.assertEqual(result.exception.code, 1)
 
     def test_weather_postcode_build_generates_only_private_configuration(self):
         coordinates = {"latitude": 34.0901, "longitude": -118.4065}
@@ -605,7 +620,12 @@ class LaunchpadDeviceTests(unittest.TestCase):
             (self.assets / "payloads" / (launchpad_routing.NAME + suffix)).write_bytes(
                 b"helper fixture"
             )
+        self.route_build = home.BUILD
+        self.layouts = self.root / "layouts"
+        self.layouts.mkdir()
         self.routing_calls = []
+        self.routing_targets = []
+        self.verified_models = []
         self.device_scripts = []
         self.sdk_calls = []
         self.pushes = []
@@ -649,7 +669,7 @@ class LaunchpadDeviceTests(unittest.TestCase):
             if phase == "absent"
             else {
                 "Version": 1,
-                "Build": home.BUILD,
+                "Build": self.route_build,
                 "Package": self.route_package,
                 "App": self.route_app,
                 "Phase": phase,
@@ -685,8 +705,9 @@ class LaunchpadDeviceTests(unittest.TestCase):
         source_files = launchpad.source_files
         verify_widget = launchpad.verify_widget
 
-        def render(operation, artifacts, **options):
+        def render(operation, artifacts, *, build, hashes, **options):
             self.routing_calls.append((operation, options))
+            self.routing_targets.append((build, hashes, artifacts))
             return f"TEST_ROUTING {operation}\n"
 
         async def probe(*args, **kwargs):
@@ -735,7 +756,8 @@ class LaunchpadDeviceTests(unittest.TestCase):
                 "commands": [{"stdout": output, "stderr": "", "exit_code": rc}],
             }
 
-        def verify_model(tv):
+        def verify_model(tv, model):
+            self.verified_models.append(model)
             if self.on_model:
                 self.on_model()
             if self.model_error:
@@ -762,13 +784,16 @@ class LaunchpadDeviceTests(unittest.TestCase):
         with contextlib.ExitStack() as stack:
             for target, value in (
                 ("launchpad.SOURCE", self.source),
+                ("launchpad.LAYOUTS", self.layouts),
                 (
                     "launchpad.source_files",
-                    lambda source=self.source: source_files(source),
+                    lambda source=self.source, layout=None: source_files(
+                        source, layout
+                    ),
                 ),
                 (
                     "launchpad.verify_widget",
-                    lambda path: verify_widget(path, self.source),
+                    lambda path, layout=None: verify_widget(path, self.source, layout),
                 ),
                 ("home_layout.verify_model", verify_model),
                 ("home_layout.device_command", lambda script: script),
@@ -784,6 +809,94 @@ class LaunchpadDeviceTests(unittest.TestCase):
         self.assertEqual(len(reports), 1)
         self.assertEqual(reports[0].stat().st_mode & 0o777, 0o600)
         return result, json.loads(reports[0].read_text())
+
+    def use_q65d(self, *, helper_build=Q65D_BUILD):
+        helper = self.assets / "payloads" / "q65d-2123"
+        helper.mkdir()
+        (helper / (launchpad_routing.NAME + ".dll")).write_bytes(
+            b"q65d helper " + helper_build.encode("utf-16-le")
+        )
+        (helper / (launchpad_routing.NAME + ".runtimeconfig.json")).write_bytes(b"{}")
+        layout = self.layouts / "q65d-2123"
+        layout.mkdir()
+        (layout / "index.html").write_bytes(b"<!doctype html><title>Q65D</title>")
+        self.resources["index.html"] = (layout / "index.html").read_bytes()
+        write_widget(self.widget, signed_members(self.resources))
+        self.route_build = Q65D_BUILD
+        policy = {
+            "model": "QN55Q65DAGXZD",
+            "build": Q65D_BUILD,
+            "launchpad": {
+                "layout": "q65d-2123",
+                "helper": "payloads/q65d-2123",
+                "routing_hashes": Q65D_HASHES,
+                "verification": "fixture",
+            },
+        }
+        self.fake_frame.policy = lambda: policy
+        return policy
+
+    def test_frame_target_keeps_upstream_build_helper_and_model(self):
+        result, evidence = self.run_operation("inspect")
+        self.assertEqual(result, 0, evidence)
+        self.assertEqual(
+            self.routing_targets,
+            [
+                (
+                    home.BUILD,
+                    launchpad_routing.HASHES,
+                    {
+                        ".dll": b"helper fixture",
+                        ".runtimeconfig.json": b"helper fixture",
+                    },
+                )
+            ],
+        )
+        self.assertEqual(self.verified_models, [home.MODEL])
+
+    def test_q65d_install_uses_its_build_helper_layout_and_model(self):
+        self.use_q65d()
+        result, evidence = self.run_operation("install")
+        self.assertEqual(result, 0, evidence)
+        self.assertEqual(self.verified_models, ["QN55Q65DAGXZD"])
+        self.assertTrue(self.routing_targets)
+        for build, hashes, artifacts in self.routing_targets:
+            self.assertEqual(build, Q65D_BUILD)
+            self.assertEqual(hashes, Q65D_HASHES)
+            self.assertTrue(artifacts[".dll"].startswith(b"q65d helper "))
+        build_checks = [s for s in self.device_scripts if "BUILD_ID=" in s]
+        self.assertTrue(build_checks)
+        for script in build_checks:
+            self.assertIn(f"BUILD_ID={Q65D_BUILD}", script)
+            self.assertNotIn(home.BUILD, script)
+
+    def test_q65d_widget_must_carry_its_layout(self):
+        self.use_q65d()
+        self.resources["index.html"] = b"<!doctype html><title>Frame</title>"
+        write_widget(self.widget, signed_members(self.resources))
+        with self.assertRaises(ValueError):
+            self.run_operation("install")
+        self.assertEqual(self.device_scripts, [])
+
+    def test_q65d_status_accepts_its_own_receipt(self):
+        self.use_q65d()
+        self.initial_phase = "applied"
+        result, evidence = self.run_operation("status")
+        self.assertEqual(result, 0, evidence)
+
+    def test_q65d_status_rejects_a_receipt_from_another_build(self):
+        self.use_q65d()
+        self.initial_phase = "applied"
+        self.route_build = home.BUILD
+        result, evidence = self.run_operation("status")
+        self.assertEqual(result, 1)
+        self.assertIn("Invalid", evidence["error"])
+
+    def test_q65d_refuses_a_helper_built_for_another_firmware(self):
+        self.use_q65d(helper_build=home.BUILD)
+        with self.assertRaisesRegex(ValueError, "another firmware"):
+            self.run_operation("inspect")
+        self.assertEqual(self.device_scripts, [])
 
     def test_inspect_uses_read_only_routing_and_no_sdk(self):
         result, evidence = self.run_operation("inspect")
@@ -1074,3 +1187,61 @@ class LaunchpadDeviceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LaunchTargetTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix="samshush-target-test-")
+        self.addCleanup(temporary.cleanup)
+        self.assets = Path(temporary.name)
+        helper = self.assets / "payloads" / "q65d-2123"
+        helper.mkdir(parents=True)
+        (helper / (launchpad_routing.NAME + ".dll")).write_bytes(
+            Q65D_BUILD.encode("utf-16-le")
+        )
+        self.policy = {
+            "model": "QN55Q65DAGXZD",
+            "build": Q65D_BUILD,
+            "launchpad": {
+                "layout": "q65d-2123",
+                "helper": "payloads/q65d-2123",
+                "routing_hashes": Q65D_HASHES,
+                "verification": "fixture",
+            },
+        }
+
+    def test_frame_policy_keeps_the_upstream_target(self):
+        target = launchpad.launch_target(
+            {"model": home.MODEL, "build": home.BUILD}, self.assets
+        )
+        self.assertEqual(target.helper, self.assets / "payloads")
+        self.assertIsNone(target.layout)
+        self.assertIs(target.routing_hashes, launchpad_routing.HASHES)
+
+    def test_unpinned_or_malformed_profiles_are_refused(self):
+        pins = self.policy["launchpad"]
+        s95c = json.loads(frame.PROFILES["s95c-2220"].read_text())
+        for policy in (
+            s95c,
+            {"model": home.MODEL, "build": Q65D_BUILD},
+            self.policy | {"launchpad": pins | {"extra": True}},
+            self.policy
+            | {"launchpad": {k: v for k, v in pins.items() if k != "verification"}},
+            self.policy | {"launchpad": pins | {"helper": "../payloads/q65d-2123"}},
+            self.policy | {"launchpad": pins | {"helper": "payloads/missing"}},
+            self.policy | {"launchpad": pins | {"layout": "../layouts"}},
+            self.policy | {"launchpad": pins | {"layout": "missing"}},
+            self.policy | {"build": "T-OTHERBLD-0090-REL-202601010000"},
+        ):
+            with (
+                self.subTest(policy=policy.get("launchpad")),
+                self.assertRaises(ValueError),
+            ):
+                launchpad.launch_target(policy, self.assets)
+
+    def test_layout_files_cannot_be_symlinks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            layout = Path(directory)
+            (layout / "ui.js").symlink_to(launchpad.SOURCE / "ui.js")
+            with self.assertRaises(ValueError):
+                launchpad.source_files(layout=layout)

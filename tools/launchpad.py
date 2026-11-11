@@ -21,6 +21,8 @@ from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "launcher"
+# A layout holds only the files that differ from the Frame launcher.
+LAYOUTS = SOURCE / "layouts"
 WIDGET_NS = "{http://www.w3.org/ns/widgets}"
 TIZEN_NS = "{http://tizen.org/ns/widgets}"
 DS_NS = "{http://www.w3.org/2000/09/xmldsig#}"
@@ -49,6 +51,65 @@ PRIVILEGES = {
 class Identity:
     package: str
     app: str
+
+
+@dataclass(frozen=True)
+class Target:
+    """Launcher and routing values that differ between supported TVs."""
+
+    model: str
+    build: str
+    routing_hashes: dict
+    helper: Path
+    layout: Path | None
+
+
+def layout_directory(name):
+    if (
+        not isinstance(name, str)
+        or re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", name) is None
+    ):
+        raise ValueError("Invalid launcher layout name")
+    path = LAYOUTS / name
+    if path.is_symlink() or not path.is_dir():
+        raise ValueError(f"Unknown launcher layout: {name}")
+    return path
+
+
+def launch_target(policy, assets):
+    """The Frame uses the upstream constants. Other TVs need explicit profile pins."""
+    import launchpad_routing
+    from home import BUILD, MODEL
+
+    if policy.get("model") == MODEL and policy.get("build") == BUILD:
+        return Target(MODEL, BUILD, launchpad_routing.HASHES, assets / "payloads", None)
+    pins = policy.get("launchpad")
+    if not isinstance(pins, dict) or set(pins) != {
+        "layout",
+        "helper",
+        "routing_hashes",
+        "verification",
+    }:
+        raise ValueError("Launcher requires a verified model and build")
+    helper = pins["helper"]
+    if (
+        not isinstance(helper, str)
+        or re.fullmatch(r"payloads/[a-z0-9]+(-[a-z0-9]+)*", helper) is None
+    ):
+        raise ValueError("Invalid launcher helper location")
+    dll = assets / helper / (launchpad_routing.NAME + ".dll")
+    # The helper also refuses other builds, but this catches a misplaced binary before contacting the TV.
+    if dll.is_symlink() or not dll.is_file():
+        raise ValueError("Missing launcher helper for this build")
+    if policy["build"].encode("utf-16-le") not in dll.read_bytes():
+        raise ValueError("Launcher helper was built for another firmware")
+    return Target(
+        policy["model"],
+        policy["build"],
+        pins["routing_hashes"],
+        assets / helper,
+        layout_directory(pins["layout"]),
+    )
 
 
 def parse_xml(data):
@@ -210,10 +271,14 @@ def resolve_weather_postcode(postcode):
     return {"latitude": latitude, "longitude": longitude}
 
 
-def source_files(source=SOURCE):
+def source_files(source=SOURCE, layout=None):
     files = {}
     for name in RESOURCES:
         path = source / name
+        if layout is not None and (
+            (layout / name).exists() or (layout / name).is_symlink()
+        ):
+            path = layout / name
         limit = (8 if name == "water-lilies.jpg" else 1) * 1024 * 1024
         if path.is_symlink() or not path.is_file() or path.stat().st_size > limit:
             raise ValueError(f"Missing or invalid launcher resource: {name}")
@@ -222,9 +287,9 @@ def source_files(source=SOURCE):
     return files
 
 
-def signed_widget_resources(path, source=SOURCE, *, previous=False):
+def signed_widget_resources(path, source=SOURCE, *, previous=False, layout=None):
     """Validate signed resources; previous releases need not match this checkout."""
-    expected = None if previous else source_files(source)
+    expected = None if previous else source_files(source, layout)
     if path.is_symlink() or not path.is_file() or path.stat().st_size > 8 * 1024 * 1024:
         raise ValueError("Invalid signed widget file")
     try:
@@ -306,17 +371,26 @@ def signed_widget_resources(path, source=SOURCE, *, previous=False):
     return identity, {name: actual[name] for name in resources}
 
 
-def verify_widget(path, source=SOURCE):
+def verify_widget(path, source=SOURCE, layout=None):
     """Match static resources to this checkout and validate signed weather data.
 
     XML signature presence and resource digests are checked here. This is not
     cryptographic validation of Samsung's certificate chain; TV installation
     validates trust.
     """
-    return signed_widget_resources(path, source)[0]
+    return signed_widget_resources(path, source, layout=layout)[0]
 
 
-def build(sdk, profile, output, source=SOURCE, *, cli=None, weather_postcode=None):
+def build(
+    sdk,
+    profile,
+    output,
+    source=SOURCE,
+    *,
+    cli=None,
+    weather_postcode=None,
+    layout=None,
+):
     """Use the official packager without logging profile credentials."""
     if cli is None:
         if sdk is None:
@@ -328,7 +402,7 @@ def build(sdk, profile, output, source=SOURCE, *, cli=None, weather_postcode=Non
         raise ValueError("Official Tizen CLI is unavailable")
     if not profile or len(profile) > 128 or any(ord(char) < 32 for char in profile):
         raise ValueError("Invalid signing profile name")
-    files = source_files(source)
+    files = source_files(source, layout)
     coordinates = (
         resolve_weather_postcode(weather_postcode)
         if weather_postcode is not None
@@ -379,7 +453,9 @@ def build(sdk, profile, output, source=SOURCE, *, cli=None, weather_postcode=Non
                 "SDK signing failed; unlock the saved profile in Certificate Manager"
             )
         artifact = signed / "Shortcuts.wgt"
-        identity, signed_resources = signed_widget_resources(artifact, source)
+        identity, signed_resources = signed_widget_resources(
+            artifact, source, layout=layout
+        )
         if signed_resources[WEATHER_CONFIG] != generated:
             raise ValueError("Signed weather configuration differs from this build")
         target = output / "Shortcuts.wgt"
@@ -392,6 +468,7 @@ def build(sdk, profile, output, source=SOURCE, *, cli=None, weather_postcode=Non
         "source_sha256": {
             name: hashlib.sha256(files[name]).hexdigest() for name in RESOURCES
         },
+        "layout": layout.name if layout is not None else None,
         "weather": coordinates,
         "weather_config_sha256": hashlib.sha256(generated).hexdigest(),
         "installed": False,
@@ -404,16 +481,15 @@ def build(sdk, profile, output, source=SOURCE, *, cli=None, weather_postcode=Non
     return target
 
 
-def registration_script(identity, *, verify_resources=False, resources=None):
+def registration_script(identity, target, *, verify_resources=False, resources=None):
     """Read the one app's registration, optionally checking its installed resources."""
-    files = source_files() if resources is None else resources
+    files = source_files(layout=target.layout) if resources is None else resources
     if manifest_identity(files["config.xml"], files) != identity:
         raise ValueError("Launcher identity differs from this checkout")
-    from home import BUILD
 
     script = f"""set -euo pipefail
 [[ $(id -u) == 0 ]]
-grep -Fxq 'BUILD_ID={BUILD}' /etc/os-release
+grep -Fxq 'BUILD_ID={target.build}' /etc/os-release
 db=/opt/dbspace/.pkgmgr_parser.db
 packages=$(sqlite3 -readonly "$db" "SELECT count(*) FROM package_info WHERE package='{identity.package}';")
 apps=$(sqlite3 -readonly "$db" "SELECT count(*) FROM package_app_info WHERE app_id='{identity.app}' AND package='{identity.package}' AND app_disable='false';")
@@ -448,13 +524,16 @@ def run(args, frame):
 
     import home_layout
     import launchpad_routing
-    from home import BUILD, MODEL
 
+    target = launch_target(frame.policy(), frame.ASSETS)
     identity = manifest_identity((SOURCE / "config.xml").read_bytes())
     needs_widget = args.operation in {"install", "update", "activate"}
     previous_path = getattr(args, "previous_widget", None)
     if needs_widget:
-        if args.widget is None or verify_widget(args.widget) != identity:
+        if (
+            args.widget is None
+            or verify_widget(args.widget, layout=target.layout) != identity
+        ):
             raise ValueError("A matching signed --widget is required")
     elif args.widget is not None:
         raise ValueError("--widget is only used by install, update or activate")
@@ -466,8 +545,6 @@ def run(args, frame):
             raise ValueError("Update requires a matching signed --previous-widget")
     elif previous_path is not None:
         raise ValueError("--previous-widget is only used by update")
-    if frame.policy().get("build") != BUILD or frame.policy().get("model") != MODEL:
-        raise ValueError("Launcher requires the verified model and build")
     args.logs.mkdir(parents=True, exist_ok=True, mode=0o700)
     report = args.logs / (
         datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%SZ")
@@ -494,7 +571,7 @@ def run(args, frame):
             frozen.write(widget_bytes)
             frozen_path = Path(frozen.name)
         frozen_identity, resources = signed_widget_resources(
-            frozen_path, SOURCE, previous=previous
+            frozen_path, SOURCE, previous=previous, layout=target.layout
         )
         if frozen_identity != identity:
             raise ValueError("Frozen widget identity differs from the launcher")
@@ -525,7 +602,7 @@ def run(args, frame):
         result = asyncio.run(
             probe(
                 str(args.tv),
-                model=MODEL,
+                model=target.model,
                 callback_host=str(args.callback_host) if args.callback_host else None,
                 accept_timeout=180,
                 command_timeout=90,
@@ -542,9 +619,7 @@ def run(args, frame):
         return commands[0]["stdout"]
 
     artifacts = {
-        suffix: (
-            frame.ASSETS / "payloads" / (launchpad_routing.NAME + suffix)
-        ).read_bytes()
+        suffix: (target.helper / (launchpad_routing.NAME + suffix)).read_bytes()
         for suffix in (".dll", ".runtimeconfig.json")
     }
 
@@ -554,19 +629,27 @@ def run(args, frame):
             if operation == "apply"
             else {}
         )
-        script = launchpad_routing.render_script(operation, artifacts, **options)
+        script = launchpad_routing.render_script(
+            operation,
+            artifacts,
+            build=target.build,
+            hashes=target.routing_hashes,
+            **options,
+        )
         if operation == "apply":
             script = (
                 registration_script(
-                    identity, verify_resources=True, resources=widget_resources
+                    identity, target, verify_resources=True, resources=widget_resources
                 )
                 + script
             )
-        return launchpad_routing.parse_output(execute(script))
+        return launchpad_routing.parse_output(execute(script), build=target.build)
 
     def check_resources(resources=None):
         output = execute(
-            registration_script(identity, verify_resources=True, resources=resources)
+            registration_script(
+                identity, target, verify_resources=True, resources=resources
+            )
         )
         if output.splitlines().count("LAUNCHPAD_RESOURCES_VERIFIED") != 1:
             raise ValueError("Missing launcher resource verification")
@@ -607,7 +690,7 @@ def run(args, frame):
 
     save()
     try:
-        home_layout.verify_model(args.tv)
+        home_layout.verify_model(args.tv, target.model)
         before = routing(
             "query"
             if args.operation in {"inspect", "install", "launch", "restore"}
@@ -619,7 +702,7 @@ def run(args, frame):
                 require_owned_home(before)
                 check_resources(previous_resources)
             else:
-                output = execute(registration_script(identity))
+                output = execute(registration_script(identity, target))
                 if (
                     home_layout.marker(output, "LAUNCHPAD_PACKAGE_COUNT") != "0"
                     or home_layout.marker(output, "LAUNCHPAD_APP_COUNT") != "0"
@@ -641,7 +724,7 @@ def run(args, frame):
             checked_upload(
                 f"""set -euo pipefail
 [[ $(id -u) == 0 ]]
-grep -Fxq 'BUILD_ID={BUILD}' /etc/os-release
+grep -Fxq 'BUILD_ID={target.build}' /etc/os-release
 path={remote}
 [[ -f $path && ! -L $path && $(sha256sum "$path" | cut -d " " -f 1) == {digest} ]]
 echo LAUNCHPAD_UPLOAD_VERIFIED
@@ -664,7 +747,7 @@ echo LAUNCHPAD_UPLOAD_VERIFIED
             checked_upload(
                 f"""set -euo pipefail
 [[ $(id -u) == 0 ]]
-grep -Fxq 'BUILD_ID={BUILD}' /etc/os-release
+grep -Fxq 'BUILD_ID={target.build}' /etc/os-release
 path={remote}
 if [[ -e $path || -L $path ]]; then
  [[ -f $path && ! -L $path && $(sha256sum "$path" | cut -d " " -f 1) == {digest} ]]
@@ -731,6 +814,10 @@ def main():
     parser.add_argument(
         "--output", required=True, type=Path, help="Fresh private output directory"
     )
+    parser.add_argument(
+        "--layout",
+        help="Launcher layout for a non-Frame TV, such as q65d-2123; omitted builds the Frame layout",
+    )
     args = parser.parse_args()
     try:
         target = build(
@@ -739,6 +826,7 @@ def main():
             args.output.resolve(),
             cli=args.cli.expanduser().resolve() if args.cli else None,
             weather_postcode=args.weather_postcode,
+            layout=layout_directory(args.layout) if args.layout else None,
         )
     except (OSError, ValueError) as error:
         parser.exit(1, f"{error}\n")

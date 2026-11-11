@@ -97,6 +97,32 @@ def main():
                 config_data == config_baseline.read_bytes()
             )
         result["helpers"].append(helper)
+    # Non-Frame launcher profiles carry a routing helper compiled for their build.
+    for profile in sorted((ROOT / "tools/profiles").glob("*.json")):
+        policy = json.loads(profile.read_text())
+        pins = policy.get("launchpad")
+        if pins is None:
+            continue
+        artifacts = launchpad_routing.build_helper(
+            dotnet,
+            args.output / f"{launchpad_routing.NAME}-{profile.stem}",
+            policy["build"],
+        )
+        baseline = ROOT / "tools/assets" / pins["helper"]
+        result["helpers"].append(
+            {
+                "name": f"{launchpad_routing.NAME} ({profile.stem})",
+                "sha256": hashlib.sha256(artifacts[".dll"]).hexdigest(),
+                "matches_checked_in_asset": artifacts[".dll"]
+                == (baseline / (launchpad_routing.NAME + ".dll")).read_bytes(),
+                "runtimeconfig_matches_checked_in_asset": artifacts[
+                    ".runtimeconfig.json"
+                ]
+                == (
+                    baseline / (launchpad_routing.NAME + ".runtimeconfig.json")
+                ).read_bytes(),
+            }
+        )
     (args.output / "manifest.json").write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps(result, indent=2))
 

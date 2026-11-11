@@ -509,12 +509,16 @@ def main():
             getattr(args, "group", None) and args.group not in p["optional_controls"]
         ):
             parser.error("Optional controls have not been validated for this profile")
-        if args.action in ("home", "quiet-hours") or (
-            args.action == "launchpad" and args.operation != "audit"
-        ):
+        if args.action in ("home", "quiet-hours"):
             parser.error(
-                "Home, launchpad and quiet hours are only available on the Frame profile"
+                "Home preferences and quiet hours are only available on the Frame profile"
             )
+        if (
+            args.action == "launchpad"
+            and args.operation != "audit"
+            and "launchpad" not in p
+        ):
+            parser.error("The launcher has not been pinned for this profile")
         if args.action == "apply" and args.scope != "voice":
             parser.error("Only voice runtime controls are supported by this profile")
     if args.action == "quiet-hours":

@@ -160,7 +160,7 @@ firmware installation or mask the general updater to change this preference.
 ## Home Screen (optional)
 
 Optionally replace the default SmartHub noise with a custom home screen.
-`home`, `launchpad` and `quiet-hours` are only available on the Frame profile; `launchpad audit` is read-only and works on every profile.
+`home` and `quiet-hours` are Frame-only. `launchpad` runs on the Frame and on profiles with a `launchpad` block; `launchpad audit` is read-only and works on every profile.
 
 - Confirm the supported model/build and create an owner-managed Samsung TV signing profile. Keep certificates and device records under ignored `.local/` storage.
 - Build the widget with `tools/launchpad.py`; add `--weather-postcode` only when requested. Generate location data in private output, never tracked source or examples.
@@ -243,6 +243,12 @@ and native readback passed. The owner confirmed the layout, Apple TV, Settings,
 Art, Back and physical Home. The original Samsung shortcut row was restored.
 Reboot/standby persistence and live Home-assignment restoration remain unverified.
 Existing native presets below do not implement this replacement.
+
+### Other profiles
+
+A non-Frame profile needs a `launchpad` block with its layout, helper directory and the five routing-library digests. `launchpad audit` reads those digests, the Home keys, the runtime and the visible app IDs without writing anything. Layouts under `launcher/layouts/NAME` replace only `index.html`, `ui.js` and `device.js`; everything else comes from `launcher/`. Build with `launchpad.py --layout NAME`.
+
+The routing helper checks `/etc/os-release` and writes its build into the recovery receipt, so each build has its own binary under `tools/assets/payloads/PROFILE`. It is compiled from the same source with only the build constant changed; `build_payloads.py` rebuilds and compares it. Never point a profile at another build's helper or edit the constant by hand.
 
 Home setup is separate from privacy controls and automatic boot reapplication.
 `home install --startup-only` applies exactly three native preferences:
