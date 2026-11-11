@@ -59,7 +59,8 @@ p, h1, h2 { margin: 0; }
   font-variant-numeric: tabular-nums;
 }
 
-.side { display: flex; flex-direction: column; gap: .9vw; }
+/* Each card on the right is as wide as its content; they line up on the right edge only. */
+.side { display: flex; flex-direction: column; align-items: flex-end; gap: .9vw; }
 
 .sea, .forecast {
   padding: .9vw 1.2vw;
@@ -85,9 +86,6 @@ p, h1, h2 { margin: 0; }
 }
 
 .sea, .forecast { display: flex; gap: 1.5vw; }
-
-/* The side column is as wide as the forecast panel; the beach card spreads its columns across it. */
-.sea { justify-content: space-between; }
 
 .widget-value .low { color: rgba(235, 235, 245, .6); }
 
