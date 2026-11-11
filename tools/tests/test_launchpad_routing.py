@@ -120,6 +120,25 @@ class RoutingEvidenceTests(unittest.TestCase):
             with self.subTest(value=type(value)), self.assertRaises(ValueError):
                 routing.render_script("query", artifacts | {".dll": value})
 
+    def test_audit_is_read_only_and_checks_the_profile_build(self):
+        build = "T-NKLDUABC-0090-REL-202603190159"
+        script = routing.render_audit(build, "Gxqk7W2na5")
+        self.assertIn(f"BUILD_ID={build}", script)
+        for word in ("vconftool set", "rm -", "mkdir", "app_launcher", "systemctl"):
+            self.assertNotIn(word, script)
+        subprocess.run(
+            ["bash", "-n"], input=script, text=True, check=True, capture_output=True
+        )
+        for build, package in (
+            ("T-X; reboot", "Gxqk7W2na5"),
+            (routing.BUILD, "bad'pkg"),
+        ):
+            with (
+                self.subTest(build=build, package=package),
+                self.assertRaises(ValueError),
+            ):
+                routing.render_audit(build, package)
+
     def test_all_rendered_operations_have_valid_bash_syntax(self):
         for operation in ("query", "apply", "status", "restore"):
             args = (

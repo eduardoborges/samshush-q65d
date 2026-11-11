@@ -12,6 +12,7 @@ from pathlib import Path
 from home import BUILD
 
 JOURNAL = "/opt/usr/share/samshush-home-v1"
+BUILD_PATTERN = r"T-[A-Z0-9]+-[0-9]{4}-REL-[0-9]{12}"
 NAME = "LaunchpadRouting"
 HOME_KEY = "db/appfw/home_appid"
 KEYS = {
@@ -46,6 +47,59 @@ PROJECT = """<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup>
 <DebugType>none</DebugType><PathMap>$(MSBuildProjectDirectory)=/samshush/LaunchpadRouting</PathMap>
 </PropertyGroup></Project>
 """
+
+
+AUDIT = r"""set -euo pipefail
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export LC_ALL=C
+[[ $(id -u) == 0 ]]
+grep -Fxq BUILD_ID=@@BUILD@@ /etc/os-release
+shopt -s nullglob
+echo 'IDENTITY'
+uname -m
+echo 'ROUTING LIBRARIES'
+for path in /usr/lib/libaul.so* /usr/lib/libbundle.so* /usr/lib/libvconf.so* /usr/lib/libcapi-appfw-app-operation-tv.so* /usr/lib/libcapi-appfw-app-control.so*; do
+ ls -l "$path"
+ if [[ -f $path && ! -L $path ]]; then sha256sum "$path"; fi
+done
+echo 'RUNTIME'
+for path in /usr/bin/dotnet /usr/bin/tvctx-manager; do
+ if [[ -e $path ]]; then ls -l "$path"; sha256sum "$path"; else echo "ABSENT $path"; fi
+done
+for path in /usr/share/dotnet/shared/Microsoft.NETCore.App/*; do echo "RUNTIME VERSION $path"; done
+echo 'HOME KEYS'
+for key in @@KEYS@@; do
+ vconftool get "$key" || echo "UNAVAILABLE $key"
+done
+echo 'ROUTING PROCESS'
+for path in /proc/[0-9]*/exe; do
+ if [[ $(readlink "$path" 2>/dev/null || true) == /usr/bin/tvctx-manager ]]; then
+  awk '/^Uid:/ {print "TVCTX UID", $2, $3}' "${path%/exe}/status"
+ fi
+done
+echo 'JOURNALS'
+for path in @@JOURNAL@@ /run/frame-runtime-v1.lock; do
+ if [[ -e $path || -L $path ]]; then ls -ld "$path"; else echo "ABSENT $path"; fi
+done
+echo 'REGISTRATIONS'
+sqlite3 -readonly -separator $'\t' /opt/dbspace/.pkgmgr_parser.db "SELECT app_id,app_disable,app_exec FROM package_app_info WHERE app_id IN ('com.samsung.tv.csfs','org.tizen.tv-viewer','org.tizen.menu','org.tizen.art-app') OR package='@@PACKAGE@@' ORDER BY app_id;"
+echo 'VISIBLE APPS'
+sqlite3 -readonly -separator $'\\t' /opt/dbspace/.pkgmgr_parser.db "SELECT a.app_id,a.app_disable,a.package,COALESCE(l.app_label,'') FROM package_app_info a LEFT JOIN package_app_localized_info l ON l.app_id=a.app_id AND l.app_locale='No Locale' WHERE a.app_nodisplay='false' ORDER BY a.app_id;" || echo 'VISIBLE APPS UNAVAILABLE'
+echo 'LAUNCHPAD AUDIT COMPLETE; nothing changed'
+"""
+
+
+def render_audit(build, package_id):
+    if re.fullmatch(BUILD_PATTERN, build) is None:
+        raise ValueError("Unexpected build identifier")
+    if re.fullmatch(r"[A-Za-z0-9]{10}", package_id) is None:
+        raise ValueError("Unexpected launcher package")
+    return (
+        AUDIT.replace("@@BUILD@@", shlex.quote(build))
+        .replace("@@KEYS@@", " ".join(shlex.quote(key) for key in sorted(KEYS)))
+        .replace("@@JOURNAL@@", shlex.quote(JOURNAL))
+        .replace("@@PACKAGE@@", package_id)
+    )
 
 
 def validate_identity(package_id, app_id):

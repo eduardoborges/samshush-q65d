@@ -449,6 +449,7 @@ def main():
     launchpad.add_argument(
         "operation",
         choices=(
+            "audit",
             "inspect",
             "install",
             "update",
@@ -508,7 +509,9 @@ def main():
             getattr(args, "group", None) and args.group not in p["optional_controls"]
         ):
             parser.error("Optional controls have not been validated for this profile")
-        if args.action in ("home", "launchpad", "quiet-hours"):
+        if args.action in ("home", "quiet-hours") or (
+            args.action == "launchpad" and args.operation != "audit"
+        ):
             parser.error(
                 "Home, launchpad and quiet hours are only available on the Frame profile"
             )
@@ -584,7 +587,7 @@ def main():
         import home_layout
 
         return home_layout.run(args, sys.modules[__name__])
-    if args.action == "launchpad":
+    if args.action == "launchpad" and args.operation != "audit":
         import launchpad
 
         return launchpad.run(args, sys.modules[__name__])
@@ -692,6 +695,16 @@ def main():
                 ),
             ).replace(
                 "@@UNITS@@", "\n".join(policy()["voice_privacy"]["systemd_units"])
+            )
+        elif args.action == "launchpad":
+            import launchpad
+            import launchpad_routing
+
+            script = launchpad_routing.render_audit(
+                policy()["build"],
+                launchpad.manifest_identity(
+                    (launchpad.SOURCE / "config.xml").read_bytes()
+                ).package,
             )
         elif args.action == "voice-audit":
             script = device_scripts.VOICE_AUDIT
