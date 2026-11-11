@@ -86,6 +86,7 @@ p, h1, h2 { margin: 0; }
   margin-top: .3vw;
   font-size: 3vw;
   font-weight: 300;
+  line-height: 1.2;
   letter-spacing: -.02em;
   font-variant-numeric: tabular-nums;
 }
@@ -99,11 +100,12 @@ p, h1, h2 { margin: 0; }
 
 .sea { display: flex; gap: 2vw; }
 
+/* Same box as .widget-value, so the tide line sits level with the other details. */
 .tide-chart {
   display: block;
   width: 15vw;
-  height: 4.5vw;
-  margin-top: .5vw;
+  height: 3.6vw;
+  margin-top: .3vw;
 }
 
 .tide-area { fill: rgba(100, 210, 255, .16); }

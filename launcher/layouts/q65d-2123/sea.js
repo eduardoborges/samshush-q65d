@@ -19,7 +19,7 @@
   var chartBefore = 6 * hour;
   var chartAfter = 18 * hour;
   var chartWidth = 300;
-  var chartHeight = 90;
+  var chartHeight = 72;
   var lowest = -1.6;
   var highest = 1.8;
   var svg = "http://www.w3.org/2000/svg";
