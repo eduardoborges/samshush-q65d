@@ -11,8 +11,9 @@ const source = fs.readFileSync(
 const HOUR = 3600 * 1000;
 const NOW = new Date(2026, 10, 11, 9, 30).getTime();
 
-function item(title, date) {
-  return `<item><title>${title}</title><link>https://g1.globo.com/x</link>` +
+let articles = 0;
+function item(title, date, link = `https://g1.globo.com/noticia/${++articles}.ghtml`) {
+  return `<item><title>${title}</title>` + (link === null ? "" : `<link>${link}</link>`) +
     (date ? `<pubDate>${date.toUTCString()}</pubDate>` : "") + "</item>";
 }
 
@@ -28,19 +29,23 @@ const FEED = feed([
   item("   Bebê   é encontrado &#233; resgatado &#x2014; diz polícia  ", at(8)),
   item("Sem data", null),
   item("", at(7)),
-  item("Notícia de ontem", new Date(2026, 10, 10, 22, 5)),
+  item("Link de fora", at(7, 30), "https://example.com/golpe"),
+  item("Link sem https", at(7, 20), "http://g1.globo.com/noticia.ghtml"),
+  item("Sem link", at(7, 10), null),
+  item("Notícia de ontem", new Date(2026, 10, 10, 22, 5), "https://g1.globo.com/ontem.ghtml"),
   item("Quinta manchete que não aparece", at(6))
 ]);
 
 function element(id) {
-  const node = { id, hidden: id === "news", textContent: "", className: "", children: [] };
+  const node = { id, hidden: id === "news", textContent: "", className: "", children: [], dataset: {}, attributes: {} };
+  node.setAttribute = (key, value) => { node.attributes[key] = String(value); };
   node.appendChild = child => { node.children.push(child); return child; };
   node.removeChild = child => { node.children.splice(node.children.indexOf(child), 1); return child; };
   Object.defineProperty(node, "firstChild", { get: () => node.children[0] || null });
   return node;
 }
 
-function createNews(responses) {
+function createNews(responses, ui = { refreshes: 0, refresh() { this.refreshes += 1; } }) {
   const elements = { news: element("news"), "news-list": element("news-list") };
   const timers = new Map();
   let timerID = 0;
@@ -53,6 +58,7 @@ function createNews(responses) {
     removeEventListener() {}
   };
   const window = {
+    LauncherUI: ui,
     fetch(url, options) {
       requests.push({ url, options });
       const next = responses.shift();
@@ -69,14 +75,14 @@ function createNews(responses) {
     constructor(...args) { super(...(args.length ? args : [clock.now])); }
     static now() { return clock.now; }
   }
-  vm.runInNewContext(source, { window, document, console, Date: FixedDate }, { filename: "news.js" });
-  return { news: window.LauncherNews, elements, timers, requests, clock };
+  vm.runInNewContext(source, { window, document, console, URL, Date: FixedDate }, { filename: "news.js" });
+  return { news: window.LauncherNews, elements, timers, requests, clock, ui };
 }
 
 const settle = () => new Promise(resolve => setImmediate(resolve));
-const rows = h => h.elements["news-list"].children.map(row => row.children.map(cell => cell.textContent));
+const rows = h => h.elements["news-list"].children.map(tile => tile.children.map(cell => cell.textContent));
 
-test("shows the four latest real headlines with their time, as plain text", async () => {
+test("shows the four latest g1 headlines with a link as tiles, in plain text", async () => {
   const h = createNews([FEED]);
   await settle();
   assert.equal(h.requests[0].url, "https://g1.globo.com/rss/g1/");
@@ -88,8 +94,29 @@ test("shows the four latest real headlines with their time, as plain text", asyn
     ["08:00", "Bebê é encontrado é resgatado — diz polícia"],
     ["10/11", "Notícia de ontem"]
   ]);
-  assert.deepEqual(h.elements["news-list"].children[0].children.map(cell => cell.className),
-    ["news-time", "news-title"]);
+  const tile = h.elements["news-list"].children[0];
+  assert.equal(tile.name, "button");
+  assert.equal(tile.className, "tile news-tile");
+  assert.equal(tile.tabIndex, -1);
+  assert.equal(tile.dataset.id, "news-0");
+  assert.equal(tile.dataset.url, "https://g1.globo.com/noticia/2.ghtml");
+  assert.equal(tile.attributes["aria-label"], "Câmara aprova projeto & Senado analisa");
+  assert.deepEqual(tile.children.map(cell => cell.className), ["news-time", "news-title"]);
+  assert.equal(h.elements["news-list"].children[3].dataset.url, "https://g1.globo.com/ontem.ghtml");
+  assert.equal(h.ui.refreshes, 1);
+});
+
+test("rebuilds the tiles only when the headlines change", async () => {
+  const changed = feed([item("Outra manchete", at(9, 20), "https://g1.globo.com/outra.ghtml")]);
+  const h = createNews([FEED, FEED, changed]);
+  await settle();
+  const first = h.elements["news-list"].children[0];
+  await h.news.refresh();
+  assert.equal(h.elements["news-list"].children[0], first);
+  assert.equal(h.ui.refreshes, 1);
+  await h.news.refresh();
+  assert.deepEqual(rows(h), [["09:20", "Outra manchete"]]);
+  assert.equal(h.ui.refreshes, 2);
 });
 
 test("decodes entities once and keeps markup as text", () => {
@@ -126,6 +153,7 @@ test("keeps the last headlines after a failed refresh and hides them after six h
   expiry.callback();
   assert.equal(h.elements.news.hidden, true);
   assert.equal(rows(h).length, 0);
+  assert.equal(h.ui.refreshes, 2);
 });
 
 test("refreshes every half hour and stop cancels the timers", async () => {

@@ -1,5 +1,6 @@
 /* Latest headlines from the public g1 RSS feed: https://g1.globo.com/rss/g1/
-   Headlines are written with textContent only, so feed markup can never reach the page. */
+   Each headline is a tile that opens its article in the TV browser. Feed text is written with
+   textContent only, so feed markup can never reach the page. */
 (function () {
   "use strict";
 
@@ -20,6 +21,7 @@
   var busy = false;
   var stopped = false;
   var lastNews = null;
+  var drawn = "";
 
   function character(code, original) {
     try { return String.fromCodePoint(code); } catch (error) { return original; }
@@ -36,6 +38,17 @@
       .trim();
   }
 
+  // Only https g1 pages become tiles; device.js checks the same before opening one.
+  function article(value) {
+    if (value.length > 2048) return false;
+    try {
+      var url = new URL(value);
+      return url.protocol === "https:" && url.hostname === "g1.globo.com" && !url.username && !url.password;
+    } catch (error) {
+      return false;
+    }
+  }
+
   function parse(text) {
     if (typeof text !== "string" || text.length > maxLength || text.indexOf("<rss") < 0) return null;
     var headlines = [];
@@ -44,10 +57,12 @@
     while ((match = items.exec(text)) && headlines.length < shown) {
       var title = /<title>([\s\S]*?)<\/title>/.exec(match[1]);
       var date = /<pubDate>([\s\S]*?)<\/pubDate>/.exec(match[1]);
+      var link = /<link>([\s\S]*?)<\/link>/.exec(match[1]);
       var headline = title ? decode(title[1]) : "";
       var time = date ? Date.parse(decode(date[1])) : NaN;
-      if (!headline || automated.test(headline) || !Number.isFinite(time)) continue;
-      headlines.push({ title: headline.slice(0, 200), time: time });
+      var url = link ? decode(link[1]) : "";
+      if (!headline || automated.test(headline) || !Number.isFinite(time) || !article(url)) continue;
+      headlines.push({ title: headline.slice(0, 200), time: time, url: url });
     }
     return headlines.length ? headlines : null;
   }
@@ -66,27 +81,45 @@
       : twoDigits(at.getDate()) + "/" + twoDigits(at.getMonth() + 1);
   }
 
-  function cell(row, className, text) {
+  function cell(parent, className, text) {
     var node = document.createElement("span");
     node.className = className;
     node.textContent = text;
-    row.appendChild(node);
+    parent.appendChild(node);
   }
 
+  function tile(headline, index, now) {
+    var button = document.createElement("button");
+    button.className = "tile news-tile";
+    button.type = "button";
+    button.tabIndex = -1;
+    button.dataset.id = "news-" + index;
+    button.dataset.url = headline.url;
+    button.setAttribute("aria-label", headline.title);
+    cell(button, "news-time", when(headline.time, now));
+    cell(button, "news-title", headline.title);
+    return button;
+  }
+
+  // The tiles are rebuilt only when the headlines change, so a refresh never moves the focus
+  // off a headline that is still there.
   function render() {
     var now = Date.now();
     var fresh = lastNews && now - lastNews.fetched <= maxAge;
-    while (list.firstChild) list.removeChild(list.firstChild);
-    container.hidden = !fresh;
+    var shown = fresh ? JSON.stringify(lastNews.headlines.map(function (headline) {
+      return [headline.url, headline.title, when(headline.time, now)];
+    })) : "";
     window.clearTimeout(expiryTimer);
-    if (!fresh) return;
-    lastNews.headlines.forEach(function (headline) {
-      var row = document.createElement("li");
-      cell(row, "news-time", when(headline.time, now));
-      cell(row, "news-title", headline.title);
-      list.appendChild(row);
-    });
-    expiryTimer = window.setTimeout(render, lastNews.fetched + maxAge - now);
+    if (shown !== drawn) {
+      drawn = shown;
+      while (list.firstChild) list.removeChild(list.firstChild);
+      if (fresh) {
+        lastNews.headlines.forEach(function (headline, index) { list.appendChild(tile(headline, index, now)); });
+      }
+      container.hidden = !fresh;
+      if (window.LauncherUI && typeof window.LauncherUI.refresh === "function") window.LauncherUI.refresh();
+    }
+    if (fresh) expiryTimer = window.setTimeout(render, lastNews.fetched + maxAge - now);
   }
 
   function request() {

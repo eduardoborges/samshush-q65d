@@ -40,9 +40,6 @@ p, h1, h2 { margin: 0; }
 
 .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 3vw; }
 
-/* The clock column takes what the cards leave, so long headlines can be cut with an ellipsis. */
-.now { flex: 1; min-width: 0; }
-
 .date, .widget-label, .shelf-title {
   font-size: .975vw;
   font-weight: 500;
@@ -67,7 +64,7 @@ p, h1, h2 { margin: 0; }
   border-radius: .975vw;
 }
 
-.sea[hidden], .sea-air[hidden], .forecast[hidden], .info[hidden] { display: none; }
+.sea[hidden], .sea-air[hidden], .forecast[hidden], .info[hidden], .news[hidden] { display: none; }
 
 .widget-value {
   margin-top: .225vw;
@@ -143,12 +140,9 @@ p, h1, h2 { margin: 0; }
 .market-price, .market-change { text-align: right; }
 .market-change.up { color: #30d158; }
 .market-change.down { color: #ff453a; }
-.market-time, .news-time { color: rgba(235, 235, 245, .6); }
+.market-time { color: rgba(235, 235, 245, .6); }
 
 .moon-phase { margin-top: .3vw; font-size: .975vw; }
-
-.news-list li { grid-template-columns: 3vw minmax(0, 1fr); }
-.news-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 
 .shelves { display: flex; flex-direction: column; gap: 1.05vw; }
 
@@ -211,6 +205,44 @@ p, h1, h2 { margin: 0; }
 }
 
 .tile.pending .icon { opacity: .6; }
+
+/* Headlines: glass tiles that open the article. Buttons reset their background, so the glass
+   look is set again here. Focus scales them like the app tiles. */
+.news .widget-label { margin-bottom: .6vw; }
+
+.news-tiles { gap: .9vw; }
+
+.news-tile {
+  width: 13vw;
+  height: 6.2vw;
+  padding: .75vw .9vw;
+  border-radius: .975vw;
+  align-items: flex-start;
+  text-align: left;
+  background: linear-gradient(160deg, rgba(255, 255, 255, .13), rgba(255, 255, 255, .05));
+  border: 1px solid rgba(255, 255, 255, .10);
+  transition: transform 200ms cubic-bezier(.2, .8, .2, 1);
+  will-change: transform;
+}
+
+.news-tile.selected {
+  transform: scale(1.06);
+  box-shadow: 0 0 0 .09vw rgba(255, 255, 255, .35);
+}
+
+.news-tile.pending { opacity: .6; }
+
+.news-time { font-size: .7875vw; color: rgba(235, 235, 245, .6); }
+
+.news-title {
+  margin-top: .3vw;
+  font-size: .8625vw;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 
 .tile-label {
   margin-top: 1.05vw;
