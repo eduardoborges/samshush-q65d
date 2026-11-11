@@ -178,6 +178,8 @@ class RoutingEvidenceTests(unittest.TestCase):
         build = "T-NKLDUABC-0090-REL-202603190159"
         script = routing.render_audit(build, "Gxqk7W2na5")
         self.assertIn(f"BUILD_ID={build}", script)
+        self.assertIn("a.app_nodisplay", script)
+        self.assertNotIn("WHERE a.app_nodisplay", script)
         for word in ("vconftool set", "rm -", "mkdir", "app_launcher", "systemctl"):
             self.assertNotIn(word, script)
         subprocess.run(

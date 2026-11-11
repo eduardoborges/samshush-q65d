@@ -83,8 +83,8 @@ for path in @@JOURNAL@@ /run/frame-runtime-v1.lock; do
 done
 echo 'REGISTRATIONS'
 sqlite3 -readonly -separator $'\t' /opt/dbspace/.pkgmgr_parser.db "SELECT app_id,app_disable,app_exec FROM package_app_info WHERE app_id IN ('com.samsung.tv.csfs','org.tizen.tv-viewer','org.tizen.menu','org.tizen.art-app') OR package='@@PACKAGE@@' ORDER BY app_id;"
-echo 'VISIBLE APPS'
-sqlite3 -readonly -separator $'\\t' /opt/dbspace/.pkgmgr_parser.db "SELECT a.app_id,a.app_disable,a.package,COALESCE(l.app_label,'') FROM package_app_info a LEFT JOIN package_app_localized_info l ON l.app_id=a.app_id AND l.app_locale='No Locale' WHERE a.app_nodisplay='false' ORDER BY a.app_id;" || echo 'VISIBLE APPS UNAVAILABLE'
+echo 'APPS'
+sqlite3 -readonly -separator $'\t' /opt/dbspace/.pkgmgr_parser.db "SELECT a.app_id,a.app_disable,a.app_nodisplay,a.package,COALESCE(l.app_label,'') FROM package_app_info a LEFT JOIN package_app_localized_info l ON l.app_id=a.app_id AND l.app_locale='No Locale' ORDER BY a.app_id;" || echo 'APPS UNAVAILABLE'
 echo 'LAUNCHPAD AUDIT COMPLETE; nothing changed'
 """
 
