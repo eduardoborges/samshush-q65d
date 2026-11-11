@@ -32,8 +32,7 @@ const ITEMS = [
   item("Notícia de ontem", new Date(2026, 10, 10, 22, 5).toISOString()),
   item("Quarta", at(7)),
   item("Quinta", at(6)),
-  item("Sexta", at(5)),
-  item("Sétima que não aparece", at(4))
+  item("Sexta", at(5))
 ];
 const FEED = { items: ITEMS };
 
@@ -144,18 +143,18 @@ test("shows six headlines from the g1 home feed as slides with their photos", as
   assert.equal(h.elements.news.hidden, false);
   assert.equal(h.ui.refreshes, 1);
   assert.deepEqual(h.slides(), [
-    [null, "Economia · 09:10", "Governo articula ajuste nas contas"],
     [photo("p2"), "Economia · 08:45", "Lucro da Petrobras sobe"],
-    [null, "08:00", "Foto de fora"],
     [photo("p6"), "Política · 10/11", "Notícia de ontem"],
     [photo("p7"), "Política · 07:00", "Quarta"],
-    [photo("p8"), "Política · 06:00", "Quinta"]
+    [photo("p8"), "Política · 06:00", "Quinta"],
+    [photo("p9"), "Política · 05:00", "Sexta"],
+    [null, "Economia · 09:10", "Governo articula ajuste nas contas"]
   ]);
   const image = h.elements["news-track"].children[1].children[0];
   assert.equal(image.className, "news-image");
   assert.equal(image.alt, "");
-  assert.equal(h.elements["news-slide"].dataset.url, "https://g1.globo.com/noticia/1.ghtml");
-  assert.equal(h.elements["news-slide"].attributes["aria-label"], "Governo articula ajuste nas contas");
+  assert.equal(h.elements["news-slide"].dataset.url, "https://g1.globo.com/noticia/2.ghtml");
+  assert.equal(h.elements["news-slide"].attributes["aria-label"], "Lucro da Petrobras sobe");
   assert.equal(h.elements["news-dots"].children.length, 6);
   assert.equal(h.position(), 0);
   assert.equal(h.elements["news-track"].style.transform, "translateX(0%)");
@@ -170,7 +169,7 @@ test("advances every 8 seconds, waits while the focus is on the block and jumps 
   assert.equal(h.position(), 1);
   assert.equal(track.style.transform, "translateX(-100%)");
   assert.equal(track.className, "");
-  assert.equal(h.elements["news-slide"].dataset.url, "https://g1.globo.com/noticia/2.ghtml");
+  assert.equal(h.elements["news-slide"].dataset.url, "https://g1.globo.com/noticia/6.ghtml");
 
   h.document.activeElement = h.elements["news-next"];
   h.timer("advance").callback();
@@ -211,7 +210,7 @@ test("rebuilds the slides only when the headlines change and keeps the one on sc
   await h.news.refresh();
   assert.equal(h.slides()[0][2], "Nova manchete");
   assert.equal(h.position(), 2);
-  assert.equal(h.elements["news-slide"].dataset.url, "https://g1.globo.com/noticia/2.ghtml");
+  assert.equal(h.elements["news-slide"].dataset.url, "https://g1.globo.com/noticia/6.ghtml");
   assert.equal(h.elements["news-track"].className, "news-jump");
   assert.equal(h.ui.refreshes, 1);
 });

@@ -45,11 +45,13 @@
     }
   }
 
+  // The top headline on the g1 home often has no photo. Headlines with a photo come first, and the
+  // others fill any slides left over, in feed order.
   function parse(value) {
     var items = value && Array.isArray(value.items) ? value.items : [];
     var found = [];
     var seen = {};
-    for (var index = 0; index < items.length && found.length < shown; index += 1) {
+    for (var index = 0; index < items.length; index += 1) {
       var item = items[index] || {};
       var content = item.content || {};
       var title = text(content.title);
@@ -66,7 +68,10 @@
         image: link(image, "s2-g1.glbimg.com") ? image : ""
       });
     }
-    return found.length ? found : null;
+    var ordered = found.filter(function (headline) { return headline.image; })
+      .concat(found.filter(function (headline) { return !headline.image; }))
+      .slice(0, shown);
+    return ordered.length ? ordered : null;
   }
 
   function twoDigits(value) {
