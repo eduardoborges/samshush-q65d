@@ -64,7 +64,7 @@ function createForecast(responses) {
   const elements = {};
   for (const id of ["sea-air", "sea-wind", "sea-weather", "forecast", "forecast-now", "forecast-now-detail",
     "forecast-0-date", "forecast-0-high", "forecast-0-low", "forecast-0-detail", "forecast-1-date",
-    "forecast-1-high", "forecast-1-low", "forecast-1-detail", "forecast-week"]) elements[id] = element(id);
+    "forecast-1-high", "forecast-1-low", "forecast-1-detail"]) elements[id] = element(id);
   const timers = new Map();
   let timerID = 0;
   const requests = [];
@@ -98,14 +98,13 @@ function createForecast(responses) {
 
 const settle = () => new Promise(resolve => setImmediate(resolve));
 const text = (h, id) => h.elements[id].textContent;
-const weekRows = h => h.elements["forecast-week"].children.map(row => row.children.map(cell => cell.textContent));
 
 test("fills the wind column with wind, gusts and the UV peak over the next 18 hours", async () => {
   const h = createForecast([payload()]);
   await settle();
   const request = new URL(h.requests[0].url);
   assert.equal(request.origin, "https://api.open-meteo.com");
-  assert.equal(request.searchParams.get("forecast_days"), "7");
+  assert.equal(request.searchParams.get("forecast_days"), "3");
   assert.equal(request.searchParams.get("wind_speed_unit"), "kmh");
   assert.equal(request.searchParams.get("timeformat"), "unixtime");
   assert.equal(h.requests[0].options.credentials, "omit");
@@ -114,7 +113,7 @@ test("fills the wind column with wind, gusts and the UV peak over the next 18 ho
   assert.equal(text(h, "sea-weather"), "rajadas 37 km/h · UV máx. 9");
 });
 
-test("shows now, today, tomorrow and the rest of the week", async () => {
+test("shows now, today and tomorrow", async () => {
   const h = createForecast([payload()]);
   await settle();
   assert.equal(h.elements.forecast.hidden, false);
@@ -128,15 +127,6 @@ test("shows now, today, tomorrow and the rest of the week", async () => {
     [text(h, "forecast-1-date"), text(h, "forecast-1-high"), text(h, "forecast-1-low"), text(h, "forecast-1-detail")],
     ["12/11", "30°", "24°", "Sol e nuvens · chuva 10%"]
   );
-  assert.deepEqual(weekRows(h), [
-    ["Sex", "13/11", "Céu limpo", "0%", "32°", "25°"],
-    ["Sáb", "14/11", "Nublado", "20%", "30°", "24°"],
-    ["Dom", "15/11", "Chuva", "70%", "30°", "23°"],
-    ["Seg", "16/11", "Trovoadas", "80%", "31°", "24°"],
-    ["Ter", "17/11", "Garoa", "", "31°", "25°"]
-  ]);
-  assert.deepEqual(h.elements["forecast-week"].children[0].children.map(cell => cell.className),
-    ["week-day", "week-date", "week-sky", "week-rain", "week-high", "week-low"]);
 });
 
 test("matches days to the TV calendar and leaves out unknown parts", async () => {
@@ -152,7 +142,6 @@ test("matches days to the TV calendar and leaves out unknown parts", async () =>
   assert.equal(text(h, "forecast-0-high"), "31°");
   assert.equal(text(h, "forecast-0-detail"), "chuva 60%");
   assert.equal(text(h, "forecast-1-detail"), "");
-  assert.deepEqual(weekRows(h), [["Sex", "13/11", "Céu limpo", "0%", "32°", "25°"]]);
 
   const noTomorrow = createForecast([withDaily({
     time: [-1, 0, 2, 3, 4, 5, 6].map(day)
@@ -208,7 +197,7 @@ test("keeps the last reading after a failed refresh and hides it when it expires
   await h.forecast.refresh();
   assert.equal(h.requests.length, 2);
   assert.equal(h.elements.forecast.hidden, false);
-  assert.equal(weekRows(h).length, 5);
+  assert.equal(text(h, "forecast-1-high"), "30°");
   const expiry = [...h.timers.values()].find(timer => timer.callback.name === "render");
   assert.equal(expiry.delay, HOUR);
   h.clock.now = NOW + HOUR + 1;

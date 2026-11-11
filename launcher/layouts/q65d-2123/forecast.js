@@ -6,16 +6,13 @@
   var url = "https://api.open-meteo.com/v1/forecast?latitude=-3.72&longitude=-38.52" +
     "&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,wind_gusts_10m" +
     "&hourly=uv_index&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max" +
-    "&forecast_days=7&timeformat=unixtime&timezone=America%2FFortaleza&wind_speed_unit=kmh";
+    "&forecast_days=3&timeformat=unixtime&timezone=America%2FFortaleza&wind_speed_unit=kmh";
   var hour = 60 * 60 * 1000;
   var refreshDelay = 30 * 60 * 1000;
   var requestTimeout = 15 * 1000;
   var maxAge = 6 * hour;
   // The UV peak covers the same 18 hours ahead as the tide chart next to it.
   var uvAhead = 18 * hour;
-  // Today and tomorrow get their own columns; the list holds the rest of the week.
-  var listedDays = 5;
-  var weekdays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
   // Short names for the WMO weather codes Open-Meteo reports.
   var conditions = [
     [[0], "Céu limpo"], [[1], "Poucas nuvens"], [[2], "Sol e nuvens"], [[3], "Nublado"],
@@ -28,7 +25,6 @@
   var panel = document.getElementById("forecast");
   var current = document.getElementById("forecast-now");
   var currentDetail = document.getElementById("forecast-now-detail");
-  var week = document.getElementById("forecast-week");
   var dayFields = [0, 1].map(function (index) {
     return {
       date: document.getElementById("forecast-" + index + "-date"),
@@ -104,7 +100,8 @@
     return String(value).padStart(2, "0");
   }
 
-  // Days are matched to the TV's calendar, so a forecast fetched before midnight still labels them right.
+  // Days are matched to the TV's calendar, so a forecast fetched before midnight still labels them
+  // right. That is why the request asks for three days: tomorrow is still there after midnight.
   function dayAfter(weather, now, offset) {
     var today = new Date(now);
     var day = new Date(today.getFullYear(), today.getMonth(), today.getDate() + offset);
@@ -115,7 +112,6 @@
     })[0];
     if (!entry || entry.high === null || entry.low === null) return null;
     return {
-      weekday: weekdays[day.getDay()],
       date: twoDigits(day.getDate()) + "/" + twoDigits(day.getMonth() + 1),
       high: degrees(entry.high),
       low: degrees(entry.low),
@@ -133,11 +129,6 @@
     var windParts = ["rajadas " + Math.round(weather.gusts) + " km/h"];
     if (uv !== null) windParts.push("UV máx. " + Math.round(uv));
     var days = [0, 1].map(function (offset) { return dayAfter(weather, now, offset); });
-    var list = [];
-    for (var offset = 2; offset < 2 + listedDays; offset += 1) {
-      var day = dayAfter(weather, now, offset);
-      if (day) list.push(day);
-    }
     return {
       wind: Math.round(weather.wind) + " km/h",
       windDetail: windParts.join(" · "),
@@ -150,30 +141,8 @@
           low: day.low,
           detail: [day.sky, day.rain && "chuva " + day.rain].filter(Boolean).join(" · ")
         };
-      }) : null,
-      week: list
+      }) : null
     };
-  }
-
-  function cell(row, className, text) {
-    var node = document.createElement("span");
-    node.className = className;
-    node.textContent = text;
-    row.appendChild(node);
-  }
-
-  function fillWeek(days) {
-    while (week.firstChild) week.removeChild(week.firstChild);
-    days.forEach(function (day) {
-      var row = document.createElement("li");
-      cell(row, "week-day", day.weekday);
-      cell(row, "week-date", day.date);
-      cell(row, "week-sky", day.sky);
-      cell(row, "week-rain", day.rain);
-      cell(row, "week-high", day.high);
-      cell(row, "week-low", day.low);
-      week.appendChild(row);
-    });
   }
 
   function render() {
@@ -194,7 +163,6 @@
         dayFields[index].low.textContent = day.low;
         dayFields[index].detail.textContent = day.detail;
       });
-      fillWeek(text.week);
     }
     expiryTimer = window.setTimeout(render, lastWeather.time + maxAge - now);
   }
@@ -247,7 +215,7 @@
   var fields = dayFields.reduce(function (all, day) {
     return all.concat([day.date, day.high, day.low, day.detail]);
   }, []);
-  if (!airColumn || !wind || !windDetail || !panel || !current || !currentDetail || !week ||
+  if (!airColumn || !wind || !windDetail || !panel || !current || !currentDetail ||
       fields.some(function (field) { return !field; }) || typeof window.fetch !== "function" ||
       typeof window.AbortController !== "function") return;
   document.addEventListener("visibilitychange", visibilityChanged);
