@@ -40,6 +40,9 @@ p, h1, h2 { margin: 0; }
 
 .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 3vw; }
 
+/* The clock column takes what the cards leave, so long headlines can be cut with an ellipsis. */
+.now { flex: 1; min-width: 0; }
+
 .date, .widget-label, .shelf-title {
   font-size: .975vw;
   font-weight: 500;
@@ -142,9 +145,12 @@ p, h1, h2 { margin: 0; }
 .market-price, .market-change { text-align: right; }
 .market-change.up { color: #30d158; }
 .market-change.down { color: #ff453a; }
-.market-time { color: rgba(235, 235, 245, .6); }
+.market-time, .news-time { color: rgba(235, 235, 245, .6); }
 
 .moon-phase { margin-top: .3vw; font-size: .975vw; }
+
+.news-list li { grid-template-columns: 3vw minmax(0, 1fr); }
+.news-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 
 .shelves { display: flex; flex-direction: column; gap: 1.05vw; }
 
