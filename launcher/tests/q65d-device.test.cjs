@@ -70,7 +70,7 @@ test("a failed app launch reports the TV error and releases the action", async (
   const h = createDevice();
   const result = h.device.activate({ id: "stremio", type: "app" });
   h.latest("launch").error({ name: "NotFoundError" });
-  await assert.rejects(result, /could not open.*NotFoundError/);
+  await assert.rejects(result, /O app não abriu.*NotFoundError/);
   const next = h.device.activate({ id: "youtube", type: "app" });
   h.latest("launch").success();
   await next;
@@ -111,7 +111,7 @@ test("unknown, inherited and Frame-only actions are refused without native calls
     { id: "apple-tv", type: "source", port: 1 },
     { id: "art-mode", type: "art" }
   ]) {
-    await assert.rejects(h.device.activate(action), /unavailable/);
+    await assert.rejects(h.device.activate(action), /não está disponível/);
   }
   assert.equal(h.calls.length, 0);
 });
@@ -119,16 +119,16 @@ test("unknown, inherited and Frame-only actions are refused without native calls
 test("a second action waits for the first and a silent TV times out", async () => {
   const h = createDevice();
   const first = h.device.activate({ id: "youtube", type: "app" });
-  await assert.rejects(h.device.activate({ id: "stremio", type: "app" }), /already in progress/);
+  await assert.rejects(h.device.activate({ id: "stremio", type: "app" }), /Aguarde/);
   const [id, timer] = h.timers.entries().next().value;
   assert.equal(timer.delay, 8000);
   h.timers.delete(id);
   timer.callback();
-  await assert.rejects(first, /did not confirm/);
+  await assert.rejects(first, /não confirmou/);
 });
 
 test("outside the TV the controls report that they are unavailable", async () => {
   const h = createDevice({ browser: true });
   assert.equal(h.device.available, false);
-  await assert.rejects(h.device.activate({ id: "youtube", type: "app" }), /Open this app on the TV/);
+  await assert.rejects(h.device.activate({ id: "youtube", type: "app" }), /Abra este app na TV/);
 });

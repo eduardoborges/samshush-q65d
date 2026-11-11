@@ -19,13 +19,13 @@
   }
 
   function run(work) {
-    if (!available) return Promise.reject(new Error("Open this app on the TV to use its controls."));
-    if (inFlight) return Promise.reject(new Error("An action is already in progress."));
+    if (!available) return Promise.reject(new Error("Abra este app na TV para usar os atalhos."));
+    if (inFlight) return Promise.reject(new Error("Aguarde a ação anterior terminar."));
     inFlight = true;
     return new Promise(function (resolve, reject) {
       var finished = false;
       var timer = window.setTimeout(function () {
-        finish(new Error("The TV did not confirm the action. Check the screen before trying again."));
+        finish(new Error("A TV não confirmou a ação. Confira a tela antes de tentar de novo."));
       }, 8000);
       function finish(error) {
         if (finished) return;
@@ -34,7 +34,7 @@
         window.clearTimeout(timer);
         if (error) reject(error); else resolve();
       }
-      try { work(finish); } catch (error) { finish(failure(error, "The TV could not open this screen.")); }
+      try { work(finish); } catch (error) { finish(failure(error, "A TV não conseguiu abrir esta tela.")); }
     });
   }
 
@@ -44,13 +44,13 @@
     });
     var control = new native.ApplicationControl(operation, null, null, null, data);
     native.application.launchAppControl(control, id, function () { finish(); }, function (error) {
-      finish(failure(error, "The TV could not open this screen."));
+      finish(failure(error, "A TV não conseguiu abrir esta tela."));
     });
   }
 
   function launchApp(id, finish) {
     native.application.launch(id, function () { finish(); }, function (error) {
-      finish(failure(error, "The app could not open. Check that it is still installed."));
+      finish(failure(error, "O app não abriu. Confira se ele ainda está instalado."));
     });
   }
 
@@ -58,7 +58,7 @@
     if (!action || !(
       (action.type === "app" && Object.prototype.hasOwnProperty.call(apps, action.id)) ||
       (action.id === "settings" && action.type === "settings")
-    )) return Promise.reject(new Error("This shortcut is unavailable."));
+    )) return Promise.reject(new Error("Este atalho não está disponível."));
     return run(function (finish) {
       if (action.type === "app") {
         launchApp(apps[action.id], finish);
@@ -77,7 +77,7 @@
     return run(function (finish) {
       // Explicit stock Home access remains available independently of the assigned default.
       native.application.launch("com.samsung.tv.csfs", function () { finish(); }, function (error) {
-        finish(failure(error, "Samsung Home could not open."));
+        finish(failure(error, "A Home da Samsung não abriu."));
       });
     });
   }

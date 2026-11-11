@@ -10,6 +10,11 @@
   var title = document.getElementById("selection-title");
   var error = document.getElementById("action-error");
   var clock = document.getElementById("clock");
+  var date = document.getElementById("date");
+  var weekdays = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
+    "sexta-feira", "sábado"];
+  var months = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto",
+    "setembro", "outubro", "novembro", "dezembro"];
   var adapter = window.LauncherDevice;
   var selected = 0;
   var busy = false;
@@ -20,7 +25,7 @@
   }
 
   function reportError(reason) {
-    error.textContent = reason && reason.message ? reason.message : "This action is unavailable.";
+    error.textContent = reason && reason.message ? reason.message : "Esta ação não está disponível.";
     error.hidden = false;
   }
 
@@ -49,7 +54,7 @@
     if (busy) return;
     error.hidden = true;
     if (!adapter || typeof adapter[method] !== "function") {
-      reportError(new Error("No TV connection."));
+      reportError(new Error("Sem conexão com a TV."));
       return;
     }
     busy = true;
@@ -76,9 +81,12 @@
 
   function updateClock() {
     var now = new Date();
+    var weekday = weekdays[now.getDay()];
     clock.dateTime = now.toISOString();
     clock.textContent = String(now.getHours()).padStart(2, "0") + ":" +
       String(now.getMinutes()).padStart(2, "0");
+    date.textContent = weekday.charAt(0).toUpperCase() + weekday.slice(1) + ", " +
+      now.getDate() + " de " + months[now.getMonth()];
   }
 
   var api = {

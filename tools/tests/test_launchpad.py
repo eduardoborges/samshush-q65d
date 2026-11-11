@@ -1341,10 +1341,21 @@ class LaunchTargetTests(unittest.TestCase):
         self.assertEqual(target.layout, launchpad.LAYOUTS / "q65d-2123")
         self.assertEqual(set(target.routing_hashes), set(launchpad_routing.HASHES))
         files = launchpad.source_files(layout=target.layout)
-        for name in ("index.html", "ui.js", "device.js"):
+        for name in (
+            "config.xml",
+            "index.html",
+            "styles.css",
+            "ui.js",
+            "device.js",
+            "quote.js",
+        ):
             self.assertEqual(files[name], (target.layout / name).read_bytes())
-        for name in ("config.xml", "styles.css", "weather.js", "water-lilies.jpg"):
+        for name in ("weather.js", "time-controls.js", "icon.png", "water-lilies.jpg"):
             self.assertEqual(files[name], (launchpad.SOURCE / name).read_bytes())
+        self.assertEqual(
+            launchpad.manifest_identity(files["config.xml"], files),
+            launchpad.manifest_identity((launchpad.SOURCE / "config.xml").read_bytes()),
+        )
         self.assertNotIn(b"art-mode", files["index.html"])
         frame.verify_files()
 
