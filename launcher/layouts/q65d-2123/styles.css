@@ -205,7 +205,7 @@ p, h1, h2 { margin: 0; }
 .news .widget-label { margin-bottom: .6vw; }
 
 .news-controls {
-  justify-content: center;
+  justify-content: flex-end;
   align-items: center;
   gap: .9vw;
   margin-top: .6vw;
