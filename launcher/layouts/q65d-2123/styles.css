@@ -1,4 +1,5 @@
-/* Q65D layout: dark gradient backdrop, frosted glass and tvOS-style focus motion. */
+/* Q65D layout: static dark gradient and translucent panels. The focus scale is the only motion,
+   kept on the compositor so the TV never repaints the page to animate. */
 *, *::before, *::after { box-sizing: border-box; }
 
 html, body { margin: 0; height: 100%; }
@@ -13,22 +14,14 @@ body {
 
 p, h1, h2 { margin: 0; }
 
-/* Oversized so the slow drift never shows an edge; transform keeps it on the compositor. */
 .backdrop {
   position: fixed;
-  inset: -12%;
+  inset: 0;
   background:
     radial-gradient(48vw 36vw at 18% 12%, rgba(72, 84, 200, .42), transparent 70%),
     radial-gradient(42vw 32vw at 88% 22%, rgba(24, 150, 170, .26), transparent 72%),
     radial-gradient(60vw 40vw at 62% 105%, rgba(128, 48, 160, .30), transparent 70%),
     linear-gradient(180deg, #0b0d18 0%, #030306 75%);
-  animation: drift 48s ease-in-out infinite alternate;
-  will-change: transform;
-}
-
-@keyframes drift {
-  from { transform: translate3d(-2%, -1%, 0) scale(1); }
-  to { transform: translate3d(2%, 1.5%, 0) scale(1.06); }
 }
 
 .home {
@@ -38,18 +31,10 @@ p, h1, h2 { margin: 0; }
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  animation: appear 520ms cubic-bezier(.2, .8, .2, 1) both;
-}
-
-@keyframes appear {
-  from { opacity: 0; transform: scale(1.015); }
-  to { opacity: 1; transform: none; }
 }
 
 .glass {
   background: linear-gradient(160deg, rgba(255, 255, 255, .13), rgba(255, 255, 255, .05));
-  -webkit-backdrop-filter: blur(28px) saturate(150%);
-  backdrop-filter: blur(28px) saturate(150%);
   border: 1px solid rgba(255, 255, 255, .10);
 }
 
@@ -143,8 +128,7 @@ p, h1, h2 { margin: 0; }
   height: 6.75vw;
   border-radius: 1vw;
   overflow: hidden;
-  box-shadow: 0 .5vw 1.2vw rgba(0, 0, 0, .35);
-  transition: transform 260ms cubic-bezier(.2, .8, .2, 1), box-shadow 260ms cubic-bezier(.2, .8, .2, 1);
+  transition: transform 200ms cubic-bezier(.2, .8, .2, 1);
   will-change: transform;
 }
 
@@ -174,7 +158,7 @@ p, h1, h2 { margin: 0; }
 
 .tile.selected .icon {
   transform: scale(1.12);
-  box-shadow: 0 1.8vw 3.4vw rgba(0, 0, 0, .55), 0 0 0 .12vw rgba(255, 255, 255, .35);
+  box-shadow: 0 0 0 .12vw rgba(255, 255, 255, .35);
 }
 
 .tile.pending .icon { opacity: .6; }
@@ -183,12 +167,10 @@ p, h1, h2 { margin: 0; }
   margin-top: 1.4vw;
   font-size: 1.15vw;
   font-weight: 500;
-  opacity: 0;
-  transform: translateY(-.3vw);
-  transition: opacity 200ms ease, transform 200ms ease;
+  visibility: hidden;
 }
 
-.tile.selected .tile-label { opacity: 1; transform: none; }
+.tile.selected .tile-label { visibility: visible; }
 
 /* Input tiles already show the port name inside. */
 .icon-input + .tile-label { display: none; }

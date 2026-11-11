@@ -102,14 +102,18 @@
     perform("activate", actionFor(selectedTile()));
   }
 
+  // Runs every second but touches the page only when the minute changes.
   function updateClock() {
     var now = new Date();
+    var time = String(now.getHours()).padStart(2, "0") + ":" + String(now.getMinutes()).padStart(2, "0");
     var weekday = weekdays[now.getDay()];
-    clock.dateTime = now.toISOString();
-    clock.textContent = String(now.getHours()).padStart(2, "0") + ":" +
-      String(now.getMinutes()).padStart(2, "0");
-    date.textContent = weekday.charAt(0).toUpperCase() + weekday.slice(1) + ", " +
+    var day = weekday.charAt(0).toUpperCase() + weekday.slice(1) + ", " +
       now.getDate() + " de " + months[now.getMonth()];
+    if (clock.textContent === time && date.textContent === day) return;
+    now.setSeconds(0, 0);
+    clock.dateTime = now.toISOString();
+    clock.textContent = time;
+    date.textContent = day;
   }
 
   var api = {
