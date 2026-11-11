@@ -190,6 +190,8 @@ class LaunchpadTests(unittest.TestCase):
                     launchpad.manifest_identity(SEA_MANIFEST, packaged)
         with self.assertRaisesRegex(ValueError, "network access"):
             launchpad.manifest_identity(QUOTE_MANIFEST, both)
+        # The forecast module shares the weather origin every launcher already allows.
+        launchpad.manifest_identity(MANIFEST, resources | {"forecast.js": None})
         with self.assertRaisesRegex(ValueError, "network access"):
             launchpad.manifest_identity(
                 SEA_MANIFEST.replace(b"marine-api.open-meteo.com", b"example.com"),

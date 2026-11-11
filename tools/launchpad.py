@@ -42,7 +42,11 @@ WEATHER_ORIGIN = "https://api.open-meteo.com"
 QUOTE_ORIGIN = "https://economia.awesomeapi.com.br"
 MARINE_ORIGIN = "https://marine-api.open-meteo.com"
 # Modules a layout may add beyond the Frame resources; each one unlocks only its own origin.
-LAYOUT_EXTRAS = {"quote.js": QUOTE_ORIGIN, "sea.js": MARINE_ORIGIN}
+LAYOUT_EXTRAS = {
+    "quote.js": QUOTE_ORIGIN,
+    "sea.js": MARINE_ORIGIN,
+    "forecast.js": WEATHER_ORIGIN,
+}
 LEGACY_RESOURCES = tuple(name for name in WEATHER_RESOURCES if name != "weather.js")
 SIGNATURES = ("author-signature.xml", "signature1.xml")
 PRIVILEGES = {
