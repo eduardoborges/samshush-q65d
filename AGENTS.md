@@ -159,7 +159,8 @@ firmware installation or mask the general updater to change this preference.
 
 ## Home Screen (optional)
 
-Optionally replace the default SmartHub noise with a custom home screen
+Optionally replace the default SmartHub noise with a custom home screen.
+`home`, `launchpad` and `quiet-hours` are only available on the Frame profile.
 
 - Confirm the supported model/build and create an owner-managed Samsung TV signing profile. Keep certificates and device records under ignored `.local/` storage.
 - Build the widget with `tools/launchpad.py`; add `--weather-postcode` only when requested. Generate location data in private output, never tracked source or examples.
