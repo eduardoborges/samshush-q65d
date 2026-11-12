@@ -100,7 +100,7 @@ test("shows waves, water and the next tides from the marine API", async () => {
   assert.equal(request.searchParams.get("hourly"), "sea_level_height_msl");
   assert.equal(h.requests[0].options.credentials, "omit");
   assert.equal(h.elements.sea.hidden, false);
-  assert.equal(h.elements["sea-waves"].textContent, "1,2 m");
+  assert.equal(h.elements["sea-waves"].textContent, "1,18 m");
   assert.equal(h.elements["sea-detail"].textContent, "a cada 6 s · água 29 °C");
   assert.equal(h.elements["sea-tide"].textContent, "Baixa ~11:15 · Alta ~17:30");
   assert.deepEqual(

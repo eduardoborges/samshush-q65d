@@ -121,7 +121,7 @@
     var next = sea.tides.filter(function (turn) { return turn.time > now; }).slice(0, 2);
     if (next.length < 2) return null;
     return {
-      waves: sea.waves.toFixed(1).replace(".", ",") + " m",
+      waves: sea.waves.toFixed(2).replace(".", ",") + " m",
       detail: "a cada " + Math.round(sea.period) + " s" +
         (sea.water === null ? "" : " · água " + Math.round(sea.water) + " °C"),
       tide: next.map(function (turn) {
