@@ -17,7 +17,7 @@ const NOW = new Date(2026, 10, 11, 9, 30).getTime();
 const MODEL_HIGH = MIDNIGHT + 4 * HOUR;
 
 function series(start = MIDNIGHT - 24 * HOUR, hours = 72, level = time =>
-  1.2 * Math.cos(2 * Math.PI * (time - MODEL_HIGH) / PERIOD)) {
+  1.25 * Math.cos(2 * Math.PI * (time - MODEL_HIGH) / PERIOD)) {
   const time = [];
   const levels = [];
   for (let i = 0; i < hours; i += 1) {
@@ -102,7 +102,7 @@ test("shows waves, water and the next tides from the marine API", async () => {
   assert.equal(h.elements.sea.hidden, false);
   assert.equal(h.elements["sea-waves"].textContent, "1,18 m");
   assert.equal(h.elements["sea-detail"].textContent, "a cada 6 s · água 29 °C");
-  assert.equal(h.elements["sea-tide"].textContent, "Baixa ~11:15 · Alta ~17:30");
+  assert.equal(h.elements["sea-tide"].textContent, "Baixa ~11:15 0,1 m · Alta ~17:30 2,6 m");
   assert.deepEqual(
     h.elements["sea-chart"].children.map(node => [node.name, node.attributes.class]),
     [["path", "tide-area"], ["path", "tide-line"], ["line", "tide-now-line"], ["circle", "tide-now"]]
@@ -125,7 +125,7 @@ test("finds each turn within two minutes and shifts it by the calibrated lag", (
   tides.forEach((turn, index) => {
     assert.equal(turn.high, expected[index].high);
     assert.ok(Math.abs(turn.time - expected[index].time) < 2 * 60 * 1000, new Date(turn.time).toString());
-    assert.ok(Math.abs(Math.abs(turn.level) - 1.2) < 0.02);
+    assert.ok(Math.abs(Math.abs(turn.level) - 1.25) < 0.02);
   });
   assert.ok(Math.abs(sea.levelAt(tides, tides[1].time) - tides[1].level) < 1e-9);
   assert.equal(sea.levelAt(tides, tides[0].time - HOUR), null);
@@ -141,7 +141,7 @@ test("tolerates missing levels and water temperature", async () => {
   await settle();
   assert.equal(h.elements.sea.hidden, false);
   assert.equal(h.elements["sea-detail"].textContent, "a cada 6 s");
-  assert.equal(h.elements["sea-tide"].textContent, "Baixa ~11:15 · Alta ~17:30");
+  assert.equal(h.elements["sea-tide"].textContent, "Baixa ~11:15 0,1 m · Alta ~17:30 2,6 m");
 });
 
 test("a small wobble does not add a turn", () => {

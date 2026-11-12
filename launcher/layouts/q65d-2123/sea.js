@@ -15,6 +15,10 @@
   // 28 Oct to 8 Nov 2026 it led by 33 to 85 minutes, 65 on average. Shifting by the mean
   // leaves the times within about half an hour, so they are shown rounded and approximate.
   var tideLag = 65 * 60 * 1000;
+  // The Porto do Mucuripe table measures from chart datum, 1.35 m below the model's mean sea level.
+  // Across 27 turns O POVO published for 3 to 11 Nov 2026, the table matched the model plus that
+  // offset within 0.17 m. Heights add it and keep one decimal, like the table.
+  var chartDatum = 1.35;
   // The chart shows the past 6 hours and the next 18, on a fixed scale so spring tides look bigger.
   var chartBefore = 6 * hour;
   var chartAfter = 18 * hour;
@@ -117,6 +121,11 @@
     return twoDigits(at.getHours()) + ":" + twoDigits(at.getMinutes());
   }
 
+  // Round first, so a height just under zero shows 0,0 and not -0,0.
+  function meters(value) {
+    return (Math.round(value * 10) / 10).toFixed(1).replace(".", ",") + " m";
+  }
+
   function format(sea, now) {
     var next = sea.tides.filter(function (turn) { return turn.time > now; }).slice(0, 2);
     if (next.length < 2) return null;
@@ -125,7 +134,7 @@
       detail: "a cada " + Math.round(sea.period) + " s" +
         (sea.water === null ? "" : " · água " + Math.round(sea.water) + " °C"),
       tide: next.map(function (turn) {
-        return (turn.high ? "Alta" : "Baixa") + " ~" + clock(turn.time);
+        return (turn.high ? "Alta" : "Baixa") + " ~" + clock(turn.time) + " " + meters(turn.level + chartDatum);
       }).join(" · ")
     };
   }
