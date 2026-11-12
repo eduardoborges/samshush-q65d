@@ -210,7 +210,12 @@ class LaunchpadTests(unittest.TestCase):
         resources = dict.fromkeys(launchpad.RESOURCES)
         with self.assertRaisesRegex(ValueError, "privileges"):
             launchpad.manifest_identity(PREVIOUS_MANIFEST, resources)
-        launchpad.manifest_identity(PREVIOUS_MANIFEST, resources, previous=True)
+        with self.assertRaisesRegex(ValueError, "privileges"):
+            launchpad.manifest_identity(PREVIOUS_MANIFEST, resources, previous=True)
+        legacy = dict.fromkeys(
+            launchpad.PREVIOUS_BASE + tuple(launchpad.MODULE_ORIGINS)
+        )
+        launchpad.manifest_identity(PREVIOUS_MANIFEST, legacy, previous=True)
 
     def test_previous_widget_accepts_the_installed_shapes(self):
         cases = (
@@ -245,7 +250,8 @@ class LaunchpadTests(unittest.TestCase):
     def test_previous_widget_rejects_other_shapes(self):
         base = previous_resources()
         for changed in (
-            self.resources,
+            {k: v for k, v in self.resources.items() if k != "moon.js"},
+            self.resources | {"config.xml": PREVIOUS_MANIFEST},
             {k: v for k, v in base.items() if k != "water-lilies.jpg"},
             {k: v for k, v in base.items() if k != launchpad.PREVIOUS_CONFIG},
             base | {"extra.js": b"unexpected"},
@@ -256,6 +262,18 @@ class LaunchpadTests(unittest.TestCase):
         ):
             with self.subTest(names=sorted(changed)), self.assertRaises(ValueError):
                 self.previous(changed)
+
+    def test_previous_widget_accepts_the_current_shape(self):
+        identity, files = self.previous(self.resources)
+        self.assertEqual(identity.app, "Gxqk7W2na5.Shortcuts")
+        self.assertEqual(files, self.resources)
+        # A current-shape previous widget gets no legacy privileges or origins.
+        for config in (
+            PREVIOUS_MANIFEST,
+            manifest(ORIGINS + ("https://g1.globo.com",)),
+        ):
+            with self.subTest(config=config), self.assertRaises(ValueError):
+                self.previous(self.resources | {"config.xml": config})
 
     def test_retired_origins_are_accepted_only_in_a_previous_widget(self):
         awesome_only = (launchpad.WEATHER_ORIGIN, launchpad.QUOTE_ORIGIN)
@@ -956,6 +974,24 @@ class LaunchpadDeviceTests(unittest.TestCase):
         self.assertEqual(
             self.sdk_calls[0][4:6], ("vd_appinstall", "Gxqk7W2na5.Shortcuts")
         )
+
+    def test_update_accepts_a_previous_widget_of_the_current_shape(self):
+        self.initial_phase = "applied"
+        self.previous_resources = current_resources()
+        self.previous_resources["ui.js"] = b"previous current-shape release"
+        write_widget(self.previous_widget, signed_members(self.previous_resources))
+        result, evidence = self.run_operation("update")
+        self.assertEqual(result, 0, evidence)
+        resource_checks = [
+            script
+            for script in self.device_scripts
+            if "LAUNCHPAD_RESOURCES_VERIFIED" in script
+        ]
+        self.assertIn(
+            hashlib.sha256(b"previous current-shape release").hexdigest(),
+            resource_checks[0],
+        )
+        self.assertNotIn(launchpad.PREVIOUS_CONFIG, resource_checks[0])
 
     def test_update_accepts_a_previous_widget_with_the_retired_news_origin(self):
         self.initial_phase = "applied"

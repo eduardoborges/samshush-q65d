@@ -52,9 +52,9 @@ PRIVILEGES = {
     "http://tizen.org/privilege/tv.window",
     "http://tizen.org/privilege/internet",
 }
-# Widgets built before the Frame launcher was removed carried its base files, a
-# generated weather-config.json, extra privileges and some subset of the modules.
-# They are accepted only as the previous widget of an update.
+# Widgets built on the Frame launcher carry its base files, a generated
+# weather-config.json, extra privileges and some of the modules. That legacy
+# shape is accepted only as the previous widget of an update.
 PREVIOUS_BASE = (
     "config.xml",
     "index.html",
@@ -174,16 +174,22 @@ def parse_xml(data):
         raise ValueError("Invalid widget XML") from error
 
 
+def legacy_shape(resources, previous):
+    """A previous widget built on the Frame launcher still carries its weather.js."""
+    return previous and "weather.js" in resources
+
+
 def network_origins(resources, previous=False):
     """Every set of access origins the packaged modules allow together."""
-    # The previous base carried weather.js, which used the forecast API.
-    allowed = [{WEATHER_ORIGIN} if previous else set()]
-    table = PREVIOUS_MODULE_ORIGINS if previous else MODULE_ORIGINS
+    legacy = legacy_shape(resources, previous)
+    # The legacy base carried weather.js, which used the forecast API.
+    allowed = [{WEATHER_ORIGIN} if legacy else set()]
+    table = PREVIOUS_MODULE_ORIGINS if legacy else MODULE_ORIGINS
     for name, origins in table.items():
         if name not in resources:
             continue
         options = [set(origins)]
-        if previous and name in RETIRED_ORIGINS:
+        if legacy and name in RETIRED_ORIGINS:
             options.append(set(RETIRED_ORIGINS[name]))
         allowed = [chosen | option for chosen in allowed for option in options]
     return allowed
@@ -214,7 +220,7 @@ def manifest_identity(data, resources=RESOURCES, *, previous=False):
         raise ValueError("Unexpected widget entry point or TV profile")
     nodes = widget.findall(TIZEN_NS + "privilege")
     privileges = [node.get("name") for node in nodes]
-    permitted = PREVIOUS_PRIVILEGES if previous else PRIVILEGES
+    permitted = PREVIOUS_PRIVILEGES if legacy_shape(resources, previous) else PRIVILEGES
     if (
         len(privileges) != len(permitted)
         or set(privileges) != permitted
@@ -306,13 +312,15 @@ def signed_widget_resources(path, source=SOURCE, *, previous=False):
         with zipfile.ZipFile(path) as archive:
             members = archive.infolist()
             names = [item.filename for item in members]
-            if previous:
+            if expected is not None:
+                resources = tuple(expected)
+            elif set(names) == set(RESOURCES + SIGNATURES):
+                resources = RESOURCES
+            else:
                 modules = tuple(
                     name for name in PREVIOUS_MODULE_ORIGINS if name in names
                 )
                 resources = PREVIOUS_BASE + modules + (PREVIOUS_CONFIG,)
-            else:
-                resources = tuple(expected)
             if len(names) != len(set(names)) or set(names) != set(
                 resources + SIGNATURES
             ):
@@ -338,7 +346,7 @@ def signed_widget_resources(path, source=SOURCE, *, previous=False):
     ):
         raise ValueError("Signed widget differs from current launcher source")
     identity = manifest_identity(actual["config.xml"], resources, previous=previous)
-    if previous:
+    if PREVIOUS_CONFIG in resources:
         weather_config(actual[PREVIOUS_CONFIG])
     for name in SIGNATURES:
         signature = parse_xml(actual[name])
