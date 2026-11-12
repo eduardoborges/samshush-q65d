@@ -10,8 +10,6 @@
   <access origin="https://economia.awesomeapi.com.br" subdomains="false"/>
   <access origin="https://api.binance.com" subdomains="false"/>
   <access origin="https://marine-api.open-meteo.com" subdomains="false"/>
-  <access origin="https://falkor-cda.bastian.globo.com" subdomains="false"/>
-  <access origin="https://s2-g1.glbimg.com" subdomains="false"/>
   <tizen:privilege name="http://tizen.org/privilege/internet"/>
   <tizen:privilege name="http://tizen.org/privilege/filesystem.read"/>
   <tizen:privilege name="http://tizen.org/privilege/filesystem.write"/>

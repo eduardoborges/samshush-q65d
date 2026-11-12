@@ -216,39 +216,3 @@ test("TV ao vivo selects the antenna source by type and opens the viewer", async
   await assert.rejects(missing, /TV ao vivo não está disponível/);
   await assert.rejects(none.device.activate({ id: "tv", type: "source", port: 1 }), /não está disponível/);
 });
-
-test("a g1 headline opens its article in the TV browser", async () => {
-  const h = createDevice();
-  const url = "https://g1.globo.com/politica/noticia/2026/11/11/exemplo.ghtml";
-  const result = h.device.activate({ id: "news", type: "link", url });
-  const call = h.latest("launchAppControl");
-  assert.equal(call.id, "org.tizen.browser");
-  assert.equal(call.control.operation, "http://tizen.org/appcontrol/operation/view");
-  assert.equal(call.control.uri, url);
-  call.success();
-  await result;
-
-  const failing = createDevice();
-  const failed = failing.device.activate({ id: "news", type: "link", url });
-  failing.latest("launchAppControl").error({ name: "NotFoundError" });
-  await assert.rejects(failed, /O navegador não abriu a notícia\. \(NotFoundError\)/);
-});
-
-test("links outside https g1 pages are refused without native calls", async () => {
-  const h = createDevice();
-  for (const url of [
-    undefined,
-    "",
-    "http://g1.globo.com/noticia.ghtml",
-    "https://g1.globo.com.example.com/noticia",
-    "https://globo.com/noticia",
-    "https://user:pass@g1.globo.com/noticia",
-    "javascript:alert(1)",
-    "https://g1.globo.com/" + "a".repeat(2100)
-  ]) {
-    await assert.rejects(h.device.activate({ id: "news", type: "link", url }), /não está disponível/);
-  }
-  await assert.rejects(
-    h.device.activate({ id: "youtube", type: "link", url: "https://g1.globo.com/x" }), /não está disponível/);
-  assert.equal(h.calls.length, 0);
-});

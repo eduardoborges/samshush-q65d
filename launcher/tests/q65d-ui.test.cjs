@@ -44,7 +44,6 @@ class Node {
   }
   closest(selector) {
     for (let node = this; node; node = node.parentNode) {
-      if (selector === "[hidden]" && node.hidden) return node;
       if (selector === ".tile" && node.classes.has("tile")) return node;
     }
     return null;
@@ -55,15 +54,12 @@ class Node {
   focus() { this.document.activeElement = this; }
 }
 
-function tile(document, id, label, url) {
+function tile(document, id, label) {
   const node = new Node(document, ["tile"], { "aria-label": label });
   node.dataset.id = id;
-  if (url) node.dataset.url = url;
   return node;
 }
 
-// The page's rows: the headline and its buttons in the header, hidden until the feed loads, then
-// the shelves.
 function createUI(shelf = ["youtube", "stremio", "spotify"]) {
   const listeners = {};
   const document = {
@@ -75,18 +71,10 @@ function createUI(shelf = ["youtube", "stremio", "spotify"]) {
   const body = new Node(document);
   const ids = {};
   for (const id of ["selection-title", "action-error", "clock", "date"]) ids[id] = new Node(document);
-  const news = new Node(document);
-  news.hidden = true;
-  const slider = new Node(document, ["tiles"]).append(
-    tile(document, "news", "Manchete", "https://g1.globo.com/1.ghtml"));
-  const controls = new Node(document, ["tiles"]).append(
-    tile(document, "news-previous", "Notícia anterior"), tile(document, "news-next", "Próxima notícia"));
-  controls.dataset.start = "1";
-  news.append(slider, controls);
   const names = { youtube: "YouTube", stremio: "Stremio", spotify: "Spotify" };
   const apps = new Node(document, ["tiles"]).append(...shelf.map(id => tile(document, id, names[id] || id)));
   const inputs = new Node(document, ["tiles"]).append(tile(document, "tv", "TV ao vivo"));
-  body.append(news, apps, inputs);
+  body.append(apps, inputs);
   document.body = body;
   document.getElementById = id => ids[id] || null;
   document.querySelectorAll = selector => body.querySelectorAll(selector);
@@ -106,80 +94,20 @@ function createUI(shelf = ["youtube", "stremio", "spotify"]) {
   vm.runInNewContext(source, { window, document, console, Promise, Map, WeakMap, Date }, { filename: "ui.js" });
   const key = name => listeners.keydown({ key: name, preventDefault() {} });
   const selected = () => body.descendants().filter(node => node.classes.has("selected")).map(node => node.dataset.id);
-  const show = () => {
-    news.hidden = false;
-    window.LauncherUI.refresh();
-  };
   const restTimers = () => [...timers.values()].filter(timer => timer.callback.name === "rest");
-  return { ui: window.LauncherUI, document, body, news, ids, actions, listeners, key, selected, show, restTimers };
+  return { ui: window.LauncherUI, document, body, ids, actions, listeners, key, selected, restTimers };
 }
 
 const settle = () => new Promise(resolve => setImmediate(resolve));
 const plain = value => JSON.parse(JSON.stringify(value));
 
-test("starts on YouTube and leaves the hidden headline row out of navigation", () => {
+test("starts on YouTube", () => {
   const h = createUI();
   assert.deepEqual(h.selected(), ["youtube"]);
   assert.equal(h.document.activeElement.dataset.id, "youtube");
   assert.equal(h.ids["selection-title"].textContent, "YouTube");
   h.key("ArrowUp");
   assert.deepEqual(h.selected(), ["youtube"]);
-  h.ui.refresh();
-  h.key("ArrowUp");
-  assert.deepEqual(h.selected(), ["youtube"]);
-});
-
-test("shown headline rows keep the selection and start on the next button under the headline", async () => {
-  const h = createUI();
-  h.key("ArrowRight");
-  h.show();
-  assert.deepEqual(h.selected(), ["stremio"]);
-  assert.equal(h.document.activeElement.dataset.id, "stremio");
-
-  h.key("ArrowUp");
-  assert.deepEqual(h.selected(), ["news-next"]);
-  h.key("ArrowUp");
-  assert.deepEqual(h.selected(), ["news"]);
-  assert.equal(h.ids["selection-title"].textContent, "Manchete");
-  h.key("Enter");
-  await settle();
-  assert.deepEqual(plain(h.actions), [{ id: "news", type: "link", url: "https://g1.globo.com/1.ghtml" }]);
-
-  h.key("ArrowDown");
-  h.key("ArrowLeft");
-  assert.deepEqual(h.selected(), ["news-previous"]);
-  h.key("ArrowDown");
-  assert.deepEqual(h.selected(), ["stremio"]);
-  h.key("ArrowUp");
-  assert.deepEqual(h.selected(), ["news-previous"]);
-});
-
-test("the headline buttons run their module's handler instead of a TV action", async () => {
-  const h = createUI();
-  const pressed = [];
-  h.ui.setControl("news-previous", () => pressed.push("previous"));
-  h.ui.setControl("news-next", () => pressed.push("next"));
-  h.show();
-  h.key("ArrowUp");
-  h.key("Enter");
-  h.key("ArrowLeft");
-  h.key("Enter");
-  await settle();
-  assert.deepEqual(pressed, ["next", "previous"]);
-  assert.deepEqual(h.actions, []);
-  assert.deepEqual(h.selected(), ["news-previous"]);
-});
-
-test("hiding the headline row while it has the focus returns to YouTube", () => {
-  const h = createUI();
-  h.show();
-  h.key("ArrowUp");
-  h.key("ArrowUp");
-  assert.deepEqual(h.selected(), ["news"]);
-  h.news.hidden = true;
-  h.ui.refresh();
-  assert.deepEqual(h.selected(), ["youtube"]);
-  assert.equal(h.document.activeElement.dataset.id, "youtube");
 });
 
 test("app tiles still map to their fixed actions", async () => {
@@ -192,8 +120,7 @@ test("app tiles still map to their fixed actions", async () => {
 });
 
 test("every app and input tile in the page has an action", () => {
-  const ids = [...page.matchAll(/class="tile[^"]*" data-id="([^"]+)"/g)].map(match => match[1])
-    .filter(id => !id.startsWith("news"));
+  const ids = [...page.matchAll(/class="tile[^"]*" data-id="([^"]+)"/g)].map(match => match[1]);
   assert.ok(ids.includes("primevideo") && ids.includes("hdmi-1"));
   const h = createUI(ids);
   for (const id of ids) {

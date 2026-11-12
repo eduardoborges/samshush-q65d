@@ -1,4 +1,4 @@
-/* Q65D layout: public Tizen app launches, input selection (antenna TV and HDMI) and g1 articles in the browser. */
+/* Q65D layout: public Tizen app launches and input selection (antenna TV and HDMI). */
 (function () {
   "use strict";
 
@@ -15,8 +15,6 @@
     tvplus: "HEPsqFNie0.tvplusstandalone",
     spotify: "rJeHak5zRg.Spotify"
   };
-  var browser = "org.tizen.browser";
-  var view = "http://tizen.org/appcontrol/operation/view";
   var sources = {
     "tv": { type: "TV", name: "TV ao vivo" },
     "hdmi-2": { type: "HDMI", number: 2, name: "HDMI 2" },
@@ -56,24 +54,6 @@
     var control = new native.ApplicationControl(operation, null, null, null, data);
     native.application.launchAppControl(control, id, function () { finish(); }, function (error) {
       finish(failure(error, "A TV não conseguiu abrir esta tela."));
-    });
-  }
-
-  // Only https pages on g1 open. The address comes from the feed, so anything else is refused.
-  function article(value) {
-    if (typeof value !== "string" || value.length > 2048) return false;
-    try {
-      var url = new URL(value);
-      return url.protocol === "https:" && url.hostname === "g1.globo.com" && !url.username && !url.password;
-    } catch (error) {
-      return false;
-    }
-  }
-
-  function openArticle(url, finish) {
-    var control = new native.ApplicationControl(view, url, null, null, null);
-    native.application.launchAppControl(control, browser, function () { finish(); }, function (error) {
-      finish(failure(error, "O navegador não abriu a notícia."));
     });
   }
 
@@ -133,16 +113,13 @@
       (action.type === "app" && Object.prototype.hasOwnProperty.call(apps, action.id)) ||
       (action.type === "source" && Object.prototype.hasOwnProperty.call(sources, action.id) &&
         action.port === sources[action.id].number) ||
-      (action.id === "settings" && action.type === "settings") ||
-      (action.id === "news" && action.type === "link" && article(action.url))
+      (action.id === "settings" && action.type === "settings")
     )) return Promise.reject(new Error("Este atalho não está disponível."));
     return run(function (finish, active) {
       if (action.type === "app") {
         launchApp(apps[action.id], finish);
       } else if (action.type === "source") {
         selectSource(sources[action.id], finish, active);
-      } else if (action.type === "link") {
-        openArticle(action.url, finish);
       } else {
         launchControl("org.tizen.menu", {
           Entry: "s/setting",

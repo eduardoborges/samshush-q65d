@@ -12,13 +12,9 @@
     "hdmi-2": { id: "hdmi-2", type: "source", port: 2 },
     "hdmi-1": { id: "hdmi-1", type: "source", port: 1 }
   };
-  // One row per visible .tiles container, in page order. Up and Down move between rows and return
-  // to the column used last. The headline row stays hidden until its feed loads, so a module that
-  // shows or hides a row calls refresh() and the rows are collected again.
+  // One row per shelf; Up and Down move between shelves and return to the column used last.
   var rows = [];
   var lastColumn = new WeakMap();
-  // Tiles that drive a module on this page instead of the TV, such as the headline buttons.
-  var controls = new Map();
   var title = document.getElementById("selection-title");
   var error = document.getElementById("action-error");
   var clock = document.getElementById("clock");
@@ -35,9 +31,7 @@
   var restTimer = null;
 
   function collect() {
-    rows = Array.prototype.slice.call(document.querySelectorAll(".tiles")).filter(function (shelf) {
-      return !shelf.closest("[hidden]");
-    }).map(function (shelf) {
+    rows = Array.prototype.slice.call(document.querySelectorAll(".tiles")).map(function (shelf) {
       return { shelf: shelf, tiles: Array.prototype.slice.call(shelf.querySelectorAll(".tile:not(:disabled)")) };
     }).filter(function (row) { return row.tiles.length > 0; });
   }
@@ -47,7 +41,6 @@
   }
 
   function actionFor(tile) {
-    if (tile.dataset.url) return { id: "news", type: "link", url: tile.dataset.url };
     return Object.assign({}, actions[tile.dataset.id]);
   }
 
@@ -84,10 +77,9 @@
     return true;
   }
 
-  // A row may name the tile it starts on, like the next button under the headlines.
   function columnFor(row) {
     var shelf = rows[row].shelf;
-    return lastColumn.has(shelf) ? lastColumn.get(shelf) : Number(shelf.dataset.start) || 0;
+    return lastColumn.has(shelf) ? lastColumn.get(shelf) : 0;
   }
 
   function move(step) {
@@ -106,24 +98,6 @@
   function selectId(id, focus) {
     var place = locate(allTiles().filter(function (tile) { return tile.dataset.id === id; })[0]);
     return place ? select(place.row, place.column, focus) : false;
-  }
-
-  // Keeps the selection on the same tile while it is still shown, and moves it to YouTube when its
-  // row is hidden.
-  function refresh() {
-    var tile = rows[current.row] && rows[current.row].tiles[current.column];
-    collect();
-    var place = tile && locate(tile);
-    if (place) {
-      current = place;
-      return;
-    }
-    // A hidden tile keeps its classes, so it would come back looking selected.
-    if (tile) {
-      tile.classList.remove("selected");
-      tile.tabIndex = -1;
-    }
-    if (!selectId("youtube", true)) select(0, 0, true);
   }
 
   function perform(method, action) {
@@ -152,10 +126,7 @@
   }
 
   function activate() {
-    var tile = selectedTile();
-    var control = controls.get(tile.dataset.id);
-    if (control) control();
-    else perform("activate", actionFor(tile));
+    perform("activate", actionFor(selectedTile()));
   }
 
   // Runs every second but touches the page only when the minute changes.
@@ -194,13 +165,10 @@
       document.title = adapter && adapter.available === true ? "Home" : "Home — preview";
     },
     select: function (id) { return selectId(id, true); },
-    refresh: refresh,
-    setControl: function (id, handler) { controls.set(id, handler); },
     getSelection: function () { return actionFor(selectedTile()); }
   };
   window.LauncherUI = api;
 
-  // Delegated, so tiles added later by modules behave like the ones in the page.
   document.addEventListener("focusin", function (event) {
     var tile = event.target.closest && event.target.closest(".tile");
     var place = tile && locate(tile);
