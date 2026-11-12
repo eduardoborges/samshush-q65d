@@ -1,7 +1,7 @@
 [project]
-name = "samsung-firmware-tools"
+name = "samshush"
 version = "0.3.0"
-description = "Samsung firmware inspection and exact-build TV controls"
+description = "Exact-build privacy controls for the Samsung Q65D"
 requires-python = ">=3.12,<3.14"
 dependencies = []
 

@@ -28,7 +28,7 @@ wheels = [
 ]
 
 [[package]]
-name = "samsung-firmware-tools"
+name = "samshush"
 version = "0.3.0"
 source = { virtual = "." }
 
