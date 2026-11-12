@@ -262,9 +262,8 @@ def bundle(policy, render):
         for name, entry in policy["optional_controls"].items()
         if entry["systemd_units"]
     ]
-    # Background delivery can install packages as soon as the network connects,
-    # so stop it before the larger voice batch. This shortens the boot window;
-    # it is not a persistent mask.
+    # Background delivery can install packages once the network is up, so stop it
+    # before the larger voice batch. That shortens the window but cannot close it.
     candidates.sort(key=lambda candidate: candidate[0] != "optional-delivery")
     for name, _, scope, options in candidates:
         for action in ("apply", "status"):
