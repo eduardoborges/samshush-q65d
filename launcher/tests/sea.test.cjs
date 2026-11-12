@@ -5,7 +5,7 @@ const test = require("node:test");
 const vm = require("node:vm");
 
 const source = fs.readFileSync(
-  path.join(__dirname, "..", "layouts", "q65d-2123", "sea.js"),
+  path.join(__dirname, "..", "sea.js"),
   "utf8"
 );
 const HOUR = 3600 * 1000;

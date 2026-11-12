@@ -1,135 +1,195 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api.open-meteo.com; object-src 'none'; base-uri 'none'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://economia.awesomeapi.com.br https://api.binance.com https://marine-api.open-meteo.com https://api.open-meteo.com; object-src 'none'; base-uri 'none'">
     <title>Home — preview</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="styles.css">
     <script src="device.js" defer></script>
-    <script src="time-controls.js" defer></script>
     <script src="ui.js" defer></script>
-    <script src="weather.js" defer></script>
+    <script src="quote.js" defer></script>
+    <script src="sea.js" defer></script>
+    <script src="forecast.js" defer></script>
+    <script src="moon.js" defer></script>
   </head>
   <body>
-    <main class="home" aria-label="Home">
-      <div class="atmosphere" aria-hidden="true"></div>
-      <div class="weather" id="weather" aria-label="Weather" hidden>
-        <div class="weather-now">
-          <span id="weather-current"></span>
-          <svg class="weather-icon" id="weather-icon" viewBox="0 0 32 32"></svg>
+    <div class="backdrop" aria-hidden="true"></div>
+    <main class="home" aria-label="Início">
+      <header class="top">
+        <div class="now">
+          <p class="date" id="date"></p>
+          <time class="clock" id="clock" aria-label="Hora atual"></time>
+          <section class="info" id="market" aria-label="Cotações" hidden>
+            <p class="widget-label">Mercado</p>
+            <ol class="info-list market-list" id="market-list"></ol>
+          </section>
         </div>
-        <div class="weather-details">
-          <span class="weather-forecast" id="weather-forecast"></span>
-          <a class="weather-credit" href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer" tabindex="-1" aria-label="Weather data by Open-Meteo">Open-Meteo</a>
+        <div class="side">
+          <section class="sea glass" id="sea" aria-label="Mar em Fortaleza" hidden>
+            <div class="sea-now">
+              <p class="widget-label">Ondas · Fortaleza</p>
+              <p class="widget-value" id="sea-waves"></p>
+              <p class="widget-detail" id="sea-detail"></p>
+            </div>
+            <div class="sea-tide">
+              <p class="widget-label">Maré</p>
+              <svg class="tide-chart" id="sea-chart" viewBox="0 0 300 72" aria-hidden="true"></svg>
+              <p class="widget-detail" id="sea-tide"></p>
+            </div>
+            <div class="sea-bath" id="sea-bath" hidden>
+              <p class="widget-label">Banho · Poço da Draga</p>
+              <p class="widget-value bath-value">
+                <svg class="bath-meter" id="sea-bath-meter" viewBox="0 0 76 12" aria-hidden="true"></svg>
+                <span id="sea-bath-name"></span>
+              </p>
+              <p class="widget-detail" id="sea-bath-detail"></p>
+            </div>
+            <div class="sea-air" id="sea-air" hidden>
+              <p class="widget-label">Vento</p>
+              <p class="widget-value" id="sea-wind"></p>
+              <p class="widget-detail" id="sea-weather"></p>
+            </div>
+          </section>
+          <div class="side-row">
+            <section class="moon glass" id="moon" aria-label="Lua e maré grande" hidden>
+              <p class="widget-label" id="moon-name"></p>
+              <p class="widget-value moon-value">
+                <svg class="moon-disc" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle class="moon-dark" cx="12" cy="12" r="11"></circle>
+                  <path class="moon-lit" id="moon-lit"></path>
+                </svg>
+                <span id="moon-light"></span>
+              </p>
+              <p class="widget-detail" id="moon-tide"></p>
+            </section>
+            <section class="forecast glass" id="forecast" aria-label="Previsão do tempo em Fortaleza" hidden>
+              <div>
+                <p class="widget-label">Agora</p>
+                <p class="widget-value" id="forecast-now"></p>
+                <p class="widget-detail" id="forecast-now-detail"></p>
+              </div>
+              <div>
+                <p class="widget-label">Hoje · <span id="forecast-0-date"></span></p>
+                <p class="widget-value"><span id="forecast-0-high"></span> <span class="low" id="forecast-0-low"></span></p>
+                <p class="widget-detail" id="forecast-0-detail"></p>
+              </div>
+              <div>
+                <p class="widget-label">Amanhã · <span id="forecast-1-date"></span></p>
+                <p class="widget-value"><span id="forecast-1-high"></span> <span class="low" id="forecast-1-low"></span></p>
+                <p class="widget-detail" id="forecast-1-detail"></p>
+              </div>
+            </section>
+          </div>
         </div>
+      </header>
+
+      <h1 class="visually-hidden" id="selection-title">YouTube</h1>
+      <div class="shelves">
+        <section class="shelf" aria-labelledby="apps-title">
+          <h2 class="shelf-title" id="apps-title">Apps</h2>
+          <nav class="tiles" aria-labelledby="apps-title">
+            <button class="tile selected" data-id="youtube" tabindex="0" aria-label="YouTube">
+              <span class="icon icon-youtube">
+                <svg viewBox="0 0 100 56" aria-hidden="true">
+                  <rect x="33" y="15" width="34" height="26" rx="8" fill="#ff0033"></rect>
+                  <path d="M46 22L57 28L46 34Z" fill="#ffffff"></path>
+                </svg>
+              </span>
+              <span class="tile-label">YouTube</span>
+            </button>
+
+            <button class="tile" data-id="stremio" tabindex="-1" aria-label="Stremio">
+              <span class="icon icon-stremio">
+                <svg viewBox="0 0 100 56" aria-hidden="true">
+                  <rect x="37.5" y="15.5" width="25" height="25" rx="5" transform="rotate(45 50 28)" fill="#7b5bf5"></rect>
+                  <path d="M46.5 22.8L55.5 28L46.5 33.2Z" fill="#ffffff"></path>
+                </svg>
+              </span>
+              <span class="tile-label">Stremio</span>
+            </button>
+
+            <button class="tile" data-id="primevideo" tabindex="-1" aria-label="Prime Video">
+              <span class="icon icon-primevideo">
+                <svg viewBox="0 0 100 56" aria-hidden="true">
+                  <text x="50" y="28" text-anchor="middle" font-size="10.5" font-weight="700" fill="#ffffff">prime video</text>
+                  <path d="M35 32.5Q50 39 64 32.5" fill="none" stroke="#1a98ff" stroke-width="2" stroke-linecap="round"></path>
+                  <path d="M60.8 30.6L64.6 32.2L62.4 35.6" fill="none" stroke="#1a98ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                </svg>
+              </span>
+              <span class="tile-label">Prime Video</span>
+            </button>
+
+            <button class="tile" data-id="tvplus" tabindex="-1" aria-label="Samsung TV Plus">
+              <span class="icon icon-tvplus">
+                <svg viewBox="0 0 100 56" aria-hidden="true">
+                  <rect x="36" y="15" width="28" height="20" rx="3.5" fill="none" stroke="#ffffff" stroke-width="2.2"></rect>
+                  <path d="M50 20V30M45 25H55" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round"></path>
+                  <path d="M44 40H56" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round"></path>
+                </svg>
+              </span>
+              <span class="tile-label">Samsung TV Plus</span>
+            </button>
+
+            <button class="tile" data-id="spotify" tabindex="-1" aria-label="Spotify">
+              <span class="icon icon-spotify">
+                <svg viewBox="0 0 100 56" aria-hidden="true">
+                  <circle cx="50" cy="28" r="14" fill="#1ed760"></circle>
+                  <path d="M41.2 23.6Q50 20.6 59.2 24.6M42.2 28.2Q50 25.9 57.6 29.2M43.2 32.5Q50 30.8 56 33.5" fill="none" stroke="#121212" stroke-width="2.6" stroke-linecap="round"></path>
+                </svg>
+              </span>
+              <span class="tile-label">Spotify</span>
+            </button>
+          </nav>
+        </section>
+
+        <section class="shelf" aria-labelledby="inputs-title">
+          <h2 class="shelf-title" id="inputs-title">Entradas</h2>
+          <nav class="tiles" aria-labelledby="inputs-title">
+            <button class="tile" data-id="tv" tabindex="-1" aria-label="TV ao vivo">
+              <span class="icon icon-input glass">
+                <svg viewBox="26 12 48 30" aria-hidden="true">
+                  <path d="M44 14L50 20L56 14" fill="none" stroke="#f5f5f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                  <rect x="35" y="20" width="30" height="18" rx="3" fill="none" stroke="#f5f5f7" stroke-width="2"></rect>
+                </svg>
+                <span class="input-name">TV</span>
+              </span>
+              <span class="tile-label">TV ao vivo</span>
+            </button>
+
+            <button class="tile" data-id="hdmi-2" tabindex="-1" aria-label="HDMI 2">
+              <span class="icon icon-input glass">
+                <svg viewBox="26 16 48 24" aria-hidden="true">
+                  <path d="M38 21H62V29L57.5 34H42.5L38 29Z" fill="none" stroke="#f5f5f7" stroke-width="2" stroke-linejoin="round"></path>
+                  <path d="M44 25.5V29M48 25.5V29M52 25.5V29M56 25.5V29" stroke="#f5f5f7" stroke-width="1.6" stroke-linecap="round"></path>
+                </svg>
+                <span class="input-name">HDMI 2</span>
+              </span>
+              <span class="tile-label">HDMI 2</span>
+            </button>
+
+            <button class="tile" data-id="hdmi-1" tabindex="-1" aria-label="HDMI 1">
+              <span class="icon icon-input glass">
+                <svg viewBox="26 16 48 24" aria-hidden="true">
+                  <path d="M38 21H62V29L57.5 34H42.5L38 29Z" fill="none" stroke="#f5f5f7" stroke-width="2" stroke-linejoin="round"></path>
+                  <path d="M44 25.5V29M48 25.5V29M52 25.5V29M56 25.5V29" stroke="#f5f5f7" stroke-width="1.6" stroke-linecap="round"></path>
+                </svg>
+                <span class="input-name">HDMI 1</span>
+              </span>
+              <span class="tile-label">HDMI 1</span>
+            </button>
+
+            <button class="tile settings-button" data-id="settings" tabindex="-1" aria-label="Ajustes">
+              <svg viewBox="-40 -40 80 80" aria-hidden="true">
+                <path fill-rule="evenodd" d="M-9-39H9L12-29L19-25L30-28L39-12L31-5V5L39 12L30 28L19 25L12 29L9 39H-9L-12 29L-19 25L-30 28L-39 12L-31 5V-5L-39-12L-30-28L-19-25L-12-29ZM16 0A16 16 0 1 0-16 0A16 16 0 1 0 16 0Z"></path>
+              </svg>
+            </button>
+          </nav>
+        </section>
       </div>
-      <time class="clock" id="clock" aria-label="Current time"></time>
-
-      <section class="launcher" aria-labelledby="selection-title">
-        <h1 id="selection-title">Apple TV</h1>
-        <nav class="tiles" aria-label="Sources and controls">
-          <button class="tile selected" data-id="apple-tv" tabindex="0" aria-label="Apple TV, HDMI 1">
-            <svg class="tile-art apple-tv" viewBox="0 0 220 150" aria-hidden="true">
-              <defs>
-                <linearGradient id="box-top" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0" stop-color="#55585f"></stop>
-                  <stop offset="1" stop-color="#24262b"></stop>
-                </linearGradient>
-                <linearGradient id="remote-body" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0" stop-color="#f1f1f1"></stop>
-                  <stop offset="1" stop-color="#a7a8ab"></stop>
-                </linearGradient>
-              </defs>
-              <ellipse class="device-shadow" cx="105" cy="119" rx="75" ry="12"></ellipse>
-              <path d="M33 58Q32 48 44 45L102 30Q111 28 120 32L153 47Q162 51 160 62L157 93Q156 99 147 102L94 118Q86 120 79 117L42 101Q36 98 36 91Z" fill="#15171b"></path>
-              <path d="M37 50Q35 47 46 44L103 30Q112 28 119 32L153 47Q163 52 153 56L96 74Q87 77 79 73L40 57Q33 54 37 50Z" fill="url(#box-top)"></path>
-              <path d="M88 78V113" stroke="#050609" stroke-width="2" opacity=".5"></path>
-              <circle cx="142" cy="89" r="1.6" fill="#d6d8d9"></circle>
-              <g transform="translate(150 83) rotate(25)">
-                <rect width="27" height="67" rx="7" fill="#85878d" transform="translate(2 2)"></rect>
-                <rect width="27" height="67" rx="7" fill="url(#remote-body)"></rect>
-                <circle cx="13.5" cy="15" r="9" fill="#34363b"></circle>
-                <circle cx="13.5" cy="15" r="5.7" fill="#4e5056"></circle>
-                <circle cx="8.5" cy="32" r="3" fill="#3b3d42"></circle>
-                <circle cx="19" cy="32" r="3" fill="#3b3d42"></circle>
-                <circle cx="8.5" cy="43" r="3" fill="#3b3d42"></circle>
-                <rect x="16" y="40" width="6" height="16" rx="3" fill="#3b3d42"></rect>
-              </g>
-            </svg>
-            <span class="tile-label">Apple TV</span>
-          </button>
-
-          <button class="tile" data-id="hdmi-2" tabindex="-1" aria-label="HDMI 2">
-            <svg class="tile-art" viewBox="0 0 220 150" aria-hidden="true">
-              <ellipse class="device-shadow" cx="110" cy="126" rx="58" ry="7"></ellipse>
-              <rect class="monitor-shell" x="43" y="27" width="134" height="87" rx="8"></rect>
-              <rect class="monitor-screen" x="49" y="33" width="122" height="73" rx="3"></rect>
-              <path class="monitor-stand" d="M100 114H120L125 125H143V129H77V125H95Z"></path>
-              <path class="port-outline" d="M88 59H132V77L124 85H96L88 77Z"></path>
-              <path class="port-pins" d="M99 66V74M106 66V74M113 66V74M120 66V74"></path>
-            </svg>
-            <span class="tile-label">HDMI 2</span>
-          </button>
-
-          <button class="tile audio-only" data-id="hdmi-3" disabled tabindex="-1" aria-label="HDMI 3, Arc Ultra, audio only, unavailable">
-            <svg class="tile-art soundbar" viewBox="0 0 220 150" aria-hidden="true">
-              <ellipse class="device-shadow" cx="110" cy="101" rx="87" ry="8"></ellipse>
-              <rect x="18" y="61" width="184" height="35" rx="17.5" class="soundbar-body"></rect>
-              <path d="M34 67V90M40 65V92M46 65V92M52 65V92M58 65V92M64 65V92M70 65V92M76 65V92M82 65V92M88 65V92M94 65V92M100 65V92M106 65V92M112 65V92M118 65V92M124 65V92M130 65V92M136 65V92M142 65V92M148 65V92M154 65V92M160 65V92M166 65V92M172 65V92M178 65V92M184 65V92" class="soundbar-grille"></path>
-              <path d="M104 72H116" stroke="#9b9ea6" stroke-width="1.6" stroke-linecap="round"></path>
-            </svg>
-            <span class="tile-label">HDMI 3</span>
-            <span class="tile-detail">Audio only</span>
-          </button>
-
-          <button class="tile" data-id="hdmi-4" tabindex="-1" aria-label="HDMI 4">
-            <svg class="tile-art" viewBox="0 0 220 150" aria-hidden="true">
-              <ellipse class="device-shadow" cx="110" cy="126" rx="58" ry="7"></ellipse>
-              <rect class="monitor-shell" x="43" y="27" width="134" height="87" rx="8"></rect>
-              <rect class="monitor-screen" x="49" y="33" width="122" height="73" rx="3"></rect>
-              <path class="monitor-stand" d="M100 114H120L125 125H143V129H77V125H95Z"></path>
-              <path class="port-outline" d="M88 59H132V77L124 85H96L88 77Z"></path>
-              <path class="port-pins" d="M99 66V74M106 66V74M113 66V74M120 66V74"></path>
-            </svg>
-            <span class="tile-label">HDMI 4</span>
-          </button>
-
-          <button class="tile" data-id="settings" tabindex="-1" aria-label="Settings">
-            <svg class="tile-art settings-art" viewBox="0 0 220 150" aria-hidden="true">
-              <circle class="gear-disc" cx="110" cy="75" r="48"></circle>
-              <g class="gear" transform="translate(110 75)">
-                <path d="M-9-39H9L12-29L19-25L30-28L39-12L31-5V5L39 12L30 28L19 25L12 29L9 39H-9L-12 29L-19 25L-30 28L-39 12L-31 5V-5L-39-12L-30-28L-19-25L-12-29Z"></path>
-                <circle r="19"></circle>
-              </g>
-            </svg>
-            <span class="tile-label">Settings</span>
-          </button>
-
-          <button class="tile" data-id="art-mode" tabindex="-1" aria-label="Art Mode">
-            <svg class="tile-art art-frame" viewBox="0 0 220 150" aria-hidden="true">
-              <rect class="picture-frame" x="44" y="24" width="132" height="103" rx="3"></rect>
-              <rect class="picture-mat" x="49" y="29" width="122" height="93"></rect>
-              <rect class="picture-sky" x="60" y="40" width="100" height="71"></rect>
-              <circle class="picture-sun" cx="132" cy="59" r="11"></circle>
-              <path class="picture-mountain-back" d="M60 94L89 64L133 111H60Z"></path>
-              <path class="picture-mountain-front" d="M87 111L129 78L160 99V111Z"></path>
-            </svg>
-            <span class="tile-label">Art Mode</span>
-          </button>
-        </nav>
-        <div class="time-controls" hidden role="group" aria-label="Art Mode schedule">
-          <button type="button" class="time-control" data-time="start" tabindex="-1" role="spinbutton" aria-valuemin="0" aria-valuemax="1439" aria-label="Sleep time">
-            <span>Sleep</span><span class="time-value"></span>
-          </button>
-          <button type="button" class="time-control" data-time="end" tabindex="-1" role="spinbutton" aria-valuemin="0" aria-valuemax="1439" aria-label="Wake time">
-            <span>Wake</span><span class="time-value"></span>
-          </button>
-        </div>
-      </section>
-      <p class="action-error" id="action-error" role="alert" hidden></p>
+      <p class="action-error glass" id="action-error" role="alert" hidden></p>
     </main>
   </body>
 </html>

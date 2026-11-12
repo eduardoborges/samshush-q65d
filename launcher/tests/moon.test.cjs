@@ -5,7 +5,7 @@ const test = require("node:test");
 const vm = require("node:vm");
 
 const source = fs.readFileSync(
-  path.join(__dirname, "..", "layouts", "q65d-2123", "moon.js"),
+  path.join(__dirname, "..", "moon.js"),
   "utf8"
 );
 const NOW = new Date(2026, 10, 11, 9, 30).getTime();

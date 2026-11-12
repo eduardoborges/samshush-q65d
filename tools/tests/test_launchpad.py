@@ -8,7 +8,6 @@ import subprocess
 import sys
 import tempfile
 import unittest
-import urllib.error
 import warnings
 import xml.etree.ElementTree as ET
 import zipfile
@@ -25,56 +24,68 @@ Q65D_BUILD = "T-NKLDUABC-0090-REL-202603190159"
 OTHER_BUILD = "T-OTHERBLD-0090-REL-202601010000"
 Q65D_HASHES = {path: "d" * 64 for path in launchpad_routing.HASHES}
 
-WEATHER_MANIFEST = b"""<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="https://example.invalid/shortcuts" version="0.2.0">
-<tizen:application package="Gxqk7W2na5" id="Gxqk7W2na5.Shortcuts" required_version="9.0"/>
-<content src="index.html"/>
-<tizen:profile name="tv"/>
-<tizen:privilege name="http://tizen.org/privilege/application.launch"/>
-<tizen:privilege name="http://tizen.org/privilege/tv.window"/>
-<tizen:privilege name="http://tizen.org/privilege/internet"/>
-<access origin="https://api.open-meteo.com" subdomains="false"/>
-</widget>"""
-MANIFEST = WEATHER_MANIFEST.replace(
-    b"</widget>",
-    b"""<tizen:privilege name="http://tizen.org/privilege/filesystem.read"/>
-<tizen:privilege name="http://tizen.org/privilege/filesystem.write"/>
-</widget>""",
-).replace(b'version="0.2.0"', b'version="0.3.0"')
-LEGACY_MANIFEST = WEATHER_MANIFEST.replace(
-    b'<tizen:privilege name="http://tizen.org/privilege/internet"/>\n', b""
-).replace(b'<access origin="https://api.open-meteo.com" subdomains="false"/>\n', b"")
-QUOTE_MANIFEST = MANIFEST.replace(
-    b'<access origin="https://api.open-meteo.com" subdomains="false"/>\n',
-    b'<access origin="https://api.open-meteo.com" subdomains="false"/>\n'
-    b'<access origin="https://economia.awesomeapi.com.br" subdomains="false"/>\n'
-    b'<access origin="https://api.binance.com" subdomains="false"/>\n',
-)
-SEA_MANIFEST = QUOTE_MANIFEST.replace(
-    b'<access origin="https://economia.awesomeapi.com.br" subdomains="false"/>\n',
-    b'<access origin="https://economia.awesomeapi.com.br" subdomains="false"/>\n'
-    b'<access origin="https://marine-api.open-meteo.com" subdomains="false"/>\n',
-)
-
 
 def access(origin):
     return f'<access origin="{origin}" subdomains="false"/>\n'.encode()
 
 
-NEWS_MANIFEST = MANIFEST.replace(
-    b"</widget>",
-    access("https://falkor-cda.bastian.globo.com")
-    + access("https://s2-g1.glbimg.com")
-    + b"</widget>",
+def privilege(name):
+    return f'<tizen:privilege name="http://tizen.org/privilege/{name}"/>\n'.encode()
+
+
+def manifest(origins, privileges=("application.launch", "tv.window", "internet")):
+    return (
+        b'<widget xmlns="http://www.w3.org/ns/widgets" '
+        b'xmlns:tizen="http://tizen.org/ns/widgets" '
+        b'id="https://example.invalid/shortcuts" version="0.4.0">\n'
+        b'<tizen:application package="Gxqk7W2na5" id="Gxqk7W2na5.Shortcuts" '
+        b'required_version="9.0"/>\n'
+        b'<content src="index.html"/>\n<tizen:profile name="tv"/>\n'
+        + b"".join(privilege(name) for name in privileges)
+        + b"".join(access(origin) for origin in origins)
+        + b"</widget>"
+    )
+
+
+ORIGINS = (
+    launchpad.WEATHER_ORIGIN,
+    launchpad.QUOTE_ORIGIN,
+    launchpad.TETHER_ORIGIN,
+    launchpad.MARINE_ORIGIN,
 )
-# The release before the news slider read the g1 RSS feed, and its quotes had no USDT.
-RSS_NEWS_MANIFEST = MANIFEST.replace(
-    b"</widget>", access("https://g1.globo.com") + b"</widget>"
+MANIFEST = manifest(ORIGINS)
+PREVIOUS_PRIVILEGES = (
+    "application.launch",
+    "tv.window",
+    "internet",
+    "filesystem.read",
+    "filesystem.write",
 )
-AWESOME_ONLY_MANIFEST = QUOTE_MANIFEST.replace(access("https://api.binance.com"), b"")
+# The installed v25 shape: the Frame base files, every current module and weather-config.json.
+PREVIOUS_MANIFEST = manifest(ORIGINS, PREVIOUS_PRIVILEGES)
 DIGESTS = {
     "sha256": "http://www.w3.org/2001/04/xmlenc#sha256",
     "sha512": "http://www.w3.org/2001/04/xmlenc#sha512",
 }
+
+
+def current_resources():
+    resources = {
+        name: f"window.test = {name!r};".encode() for name in launchpad.RESOURCES
+    }
+    resources["config.xml"] = MANIFEST
+    resources["icon.png"] = b"\x89PNG\r\n\x1a\nfixture"
+    return resources
+
+
+def previous_resources(modules=tuple(launchpad.MODULE_ORIGINS), origins=ORIGINS):
+    resources = {
+        name: f"previous {name}".encode()
+        for name in launchpad.PREVIOUS_BASE + tuple(modules)
+    }
+    resources["config.xml"] = manifest(origins, PREVIOUS_PRIVILEGES)
+    resources[launchpad.PREVIOUS_CONFIG] = b"{}\n"
+    return resources
 
 
 def signature(resources, algorithm):
@@ -126,180 +137,238 @@ class LaunchpadTests(unittest.TestCase):
         self.root = Path(temporary.name)
         self.source = self.root / "launcher"
         self.source.mkdir()
-        self.resources = {
-            "config.xml": MANIFEST,
-            "index.html": b"<!doctype html><title>Test launcher</title>",
-            "styles.css": b"body { background: black; }",
-            "ui.js": b"window.testUI = true;",
-            "device.js": b"window.testDevice = true;",
-            "time-controls.js": b"window.testSchedule = true;",
-            "weather.js": b"window.testWeather = true;",
-            "icon.png": b"\x89PNG\r\n\x1a\nfixture",
-            "water-lilies.jpg": b"\xff\xd8\xff\xd9fixture",
-            launchpad.WEATHER_CONFIG: b"{}\n",
-        }
+        self.resources = current_resources()
         for name, data in self.resources.items():
-            if name in launchpad.RESOURCES:
-                (self.source / name).write_bytes(data)
+            (self.source / name).write_bytes(data)
         self.widget = self.root / "Shortcuts.wgt"
 
     def verify(self, members=None, **kwargs):
         write_widget(self.widget, members or signed_members(self.resources), **kwargs)
         return launchpad.verify_widget(self.widget, self.source)
 
-    def quote_layout(self):
-        layout = self.root / "layout"
-        layout.mkdir()
-        (layout / "config.xml").write_bytes(QUOTE_MANIFEST)
-        (layout / "quote.js").write_bytes(b"window.testQuote = true;")
-        (layout / "unlisted.js").write_bytes(b"ignored")
-        self.resources["config.xml"] = QUOTE_MANIFEST
-        self.resources["quote.js"] = b"window.testQuote = true;"
-        return layout
+    def previous(self, resources):
+        write_widget(self.widget, signed_members(resources))
+        return launchpad.signed_widget_resources(self.widget, previous=True)
 
-    def test_layout_extras_and_their_origin_are_packaged_only_together(self):
-        layout = self.quote_layout()
-        files = launchpad.source_files(self.source, layout)
-        self.assertEqual(files["quote.js"], b"window.testQuote = true;")
-        self.assertNotIn("unlisted.js", files)
-        write_widget(self.widget, signed_members(self.resources))
+    def test_checked_in_launcher_is_the_complete_current_shape(self):
+        files = launchpad.source_files()
+        self.assertEqual(set(files), set(launchpad.RESOURCES))
+        for retired in ("weather.js", "water-lilies.jpg", "time-controls.js"):
+            self.assertFalse((launchpad.SOURCE / retired).exists())
         self.assertEqual(
-            launchpad.verify_widget(self.widget, self.source, layout).app,
+            launchpad.manifest_identity(files["config.xml"], files).app,
             "Gxqk7W2na5.Shortcuts",
         )
-        self.assertEqual(
-            launchpad.signed_widget_resources(self.widget, previous=True)[1][
-                "quote.js"
-            ],
-            b"window.testQuote = true;",
-        )
-        without_quote = {k: v for k, v in self.resources.items() if k != "quote.js"}
-        write_widget(self.widget, signed_members(without_quote))
-        with self.assertRaises(ValueError):
-            launchpad.verify_widget(self.widget, self.source, layout)
 
-    def test_quote_origin_requires_the_quote_module(self):
-        resources = dict.fromkeys(launchpad.RESOURCES)
-        with self.assertRaisesRegex(ValueError, "network access"):
-            launchpad.manifest_identity(QUOTE_MANIFEST, resources)
-        launchpad.manifest_identity(QUOTE_MANIFEST, resources | {"quote.js": None})
-        for manifest in (
-            MANIFEST,
-            QUOTE_MANIFEST.replace(b"economia.awesomeapi.com.br", b"example.com"),
-            QUOTE_MANIFEST.replace(
-                b'awesomeapi.com.br" subdomains="false"',
-                b'awesomeapi.com.br" subdomains="true"',
-            ),
+    def test_current_widget_needs_every_module_and_no_previous_files(self):
+        self.assertEqual(self.verify().app, "Gxqk7W2na5.Shortcuts")
+        for extra in (
+            "weather.js",
+            "time-controls.js",
+            "water-lilies.jpg",
+            launchpad.PREVIOUS_CONFIG,
+            "news.js",
         ):
-            with self.subTest(manifest=manifest), self.assertRaises(ValueError):
-                launchpad.manifest_identity(manifest, resources | {"quote.js": None})
+            with self.subTest(extra=extra), self.assertRaises(ValueError):
+                self.verify(signed_members(self.resources | {extra: b"{}\n"}))
+        for module in launchpad.MODULE_ORIGINS:
+            missing = {k: v for k, v in self.resources.items() if k != module}
+            with self.subTest(missing=module), self.assertRaises(ValueError):
+                self.verify(signed_members(missing))
 
-    def test_each_layout_module_unlocks_only_its_own_origin(self):
+    def test_each_module_unlocks_only_its_own_origins(self):
         resources = dict.fromkeys(launchpad.RESOURCES)
-        both = resources | {"quote.js": None, "sea.js": None}
-        launchpad.manifest_identity(SEA_MANIFEST, both)
-        for packaged in (
-            resources,
-            resources | {"quote.js": None},
-            resources | {"sea.js": None},
-        ):
-            with self.subTest(packaged=sorted(set(packaged) - set(resources))):
-                with self.assertRaisesRegex(ValueError, "network access"):
-                    launchpad.manifest_identity(SEA_MANIFEST, packaged)
-        with self.assertRaisesRegex(ValueError, "network access"):
-            launchpad.manifest_identity(QUOTE_MANIFEST, both)
-        # The forecast module shares the weather origin every launcher already allows,
-        # and the moon module makes no requests at all.
-        launchpad.manifest_identity(
-            MANIFEST, resources | {"forecast.js": None, "moon.js": None}
-        )
-        launchpad.manifest_identity(NEWS_MANIFEST, resources | {"news.js": None})
-        with self.assertRaisesRegex(ValueError, "network access"):
-            launchpad.manifest_identity(NEWS_MANIFEST, resources)
-        with self.assertRaisesRegex(ValueError, "network access"):
-            launchpad.manifest_identity(MANIFEST, resources | {"news.js": None})
-        duplicate = NEWS_MANIFEST.replace(
-            b"</widget>", access(launchpad.NEWS_ORIGIN) + b"</widget>"
-        )
-        with self.assertRaisesRegex(ValueError, "network access"):
-            launchpad.manifest_identity(duplicate, resources | {"news.js": None})
-        # The news feed and its photos are unlocked together, never one alone.
-        for origin in (launchpad.NEWS_ORIGIN, launchpad.NEWS_IMAGE_ORIGIN):
-            alone = NEWS_MANIFEST.replace(access(origin), b"")
+        launchpad.manifest_identity(MANIFEST, resources)
+        for origin in ORIGINS:
             with (
                 self.subTest(missing=origin),
                 self.assertRaisesRegex(ValueError, "network access"),
             ):
-                launchpad.manifest_identity(alone, resources | {"news.js": None})
-        with self.assertRaisesRegex(ValueError, "network access"):
-            launchpad.manifest_identity(
-                SEA_MANIFEST.replace(b"marine-api.open-meteo.com", b"example.com"),
-                both,
-            )
-
-    def test_sea_module_is_packaged_and_verified_with_the_quote_module(self):
-        layout = self.quote_layout()
-        (layout / "config.xml").write_bytes(SEA_MANIFEST)
-        (layout / "sea.js").write_bytes(b"window.testSea = true;")
-        self.resources["config.xml"] = SEA_MANIFEST
-        self.resources["sea.js"] = b"window.testSea = true;"
-        files = launchpad.source_files(self.source, layout)
-        self.assertEqual(files["sea.js"], b"window.testSea = true;")
-        write_widget(self.widget, signed_members(self.resources))
-        self.assertEqual(
-            launchpad.verify_widget(self.widget, self.source, layout).app,
-            "Gxqk7W2na5.Shortcuts",
-        )
-
-    def test_previous_widgets_may_carry_any_subset_of_layout_modules(self):
-        quote_only = self.resources | {
-            "config.xml": QUOTE_MANIFEST,
-            "quote.js": b"window.testQuote = true;",
-        }
-        both = quote_only | {
-            "config.xml": SEA_MANIFEST,
-            "sea.js": b"window.testSea = true;",
-        }
-        for resources in (quote_only, both):
-            with self.subTest(names=sorted(resources)):
-                write_widget(self.widget, signed_members(resources))
-                files = launchpad.signed_widget_resources(self.widget, previous=True)[1]
-                self.assertEqual(
-                    {name for name in launchpad.LAYOUT_EXTRAS if name in files},
-                    {name for name in launchpad.LAYOUT_EXTRAS if name in resources},
+                launchpad.manifest_identity(
+                    MANIFEST.replace(access(origin), b""), resources
                 )
+        for extra in (
+            "https://example.com",
+            launchpad.NEWS_ORIGIN,
+            "https://g1.globo.com",
+        ):
+            with (
+                self.subTest(extra=extra),
+                self.assertRaisesRegex(ValueError, "network access"),
+            ):
+                launchpad.manifest_identity(manifest(ORIGINS + (extra,)), resources)
+        without_quote = {k: v for k, v in resources.items() if k != "quote.js"}
+        with self.assertRaisesRegex(ValueError, "network access"):
+            launchpad.manifest_identity(MANIFEST, without_quote)
+        duplicate = MANIFEST.replace(
+            b"</widget>", access(launchpad.MARINE_ORIGIN) + b"</widget>"
+        )
+        with self.assertRaisesRegex(ValueError, "network access"):
+            launchpad.manifest_identity(duplicate, resources)
+
+    def test_current_widget_rejects_the_previous_privileges(self):
+        resources = dict.fromkeys(launchpad.RESOURCES)
+        with self.assertRaisesRegex(ValueError, "privileges"):
+            launchpad.manifest_identity(PREVIOUS_MANIFEST, resources)
+        launchpad.manifest_identity(PREVIOUS_MANIFEST, resources, previous=True)
+
+    def test_previous_widget_accepts_the_installed_shapes(self):
+        cases = (
+            previous_resources(),
+            previous_resources(modules=(), origins=(launchpad.WEATHER_ORIGIN,)),
+            previous_resources(
+                modules=("quote.js",),
+                origins=(launchpad.WEATHER_ORIGIN, launchpad.QUOTE_ORIGIN),
+            ),
+            previous_resources(
+                modules=tuple(launchpad.MODULE_ORIGINS) + ("news.js",),
+                origins=ORIGINS + (launchpad.NEWS_ORIGIN, launchpad.NEWS_IMAGE_ORIGIN),
+            ),
+            previous_resources(
+                modules=("quote.js", "news.js"),
+                origins=(
+                    launchpad.WEATHER_ORIGIN,
+                    launchpad.QUOTE_ORIGIN,
+                    launchpad.TETHER_ORIGIN,
+                    "https://g1.globo.com",
+                ),
+            ),
+        )
+        for resources in cases:
+            with self.subTest(names=sorted(resources)):
+                identity, files = self.previous(resources)
+                self.assertEqual(identity.app, "Gxqk7W2na5.Shortcuts")
+                self.assertEqual(files, resources)
+                with self.assertRaises(ValueError):
+                    launchpad.verify_widget(self.widget, self.source)
+
+    def test_previous_widget_rejects_other_shapes(self):
+        base = previous_resources()
+        for changed in (
+            self.resources,
+            {k: v for k, v in base.items() if k != "water-lilies.jpg"},
+            {k: v for k, v in base.items() if k != launchpad.PREVIOUS_CONFIG},
+            base | {"extra.js": b"unexpected"},
+            base | {"config.xml": manifest(ORIGINS)},
+            base | {"config.xml": manifest(ORIGINS[1:], PREVIOUS_PRIVILEGES)},
+            base | {launchpad.PREVIOUS_CONFIG: b'{"latitude":91,"longitude":0}'},
+            base | {launchpad.PREVIOUS_CONFIG: b"{};alert(1)"},
+        ):
+            with self.subTest(names=sorted(changed)), self.assertRaises(ValueError):
+                self.previous(changed)
 
     def test_retired_origins_are_accepted_only_in_a_previous_widget(self):
-        for manifest, module in (
-            (RSS_NEWS_MANIFEST, "news.js"),
-            (AWESOME_ONLY_MANIFEST, "quote.js"),
-        ):
-            with self.subTest(module=module):
-                packaged = dict.fromkeys(launchpad.RESOURCES) | {module: None}
-                launchpad.manifest_identity(manifest, packaged, previous=True)
-                with self.assertRaisesRegex(ValueError, "network access"):
-                    launchpad.manifest_identity(manifest, packaged)
-        resources = dict.fromkeys(launchpad.RESOURCES) | {"news.js": None}
-        mixed = RSS_NEWS_MANIFEST.replace(
-            b"</widget>", access(launchpad.NEWS_IMAGE_ORIGIN) + b"</widget>"
+        awesome_only = (launchpad.WEATHER_ORIGIN, launchpad.QUOTE_ORIGIN)
+        resources = dict.fromkeys(launchpad.RESOURCES)
+        with self.assertRaisesRegex(ValueError, "network access"):
+            launchpad.manifest_identity(manifest(awesome_only), resources)
+        previous = dict.fromkeys(launchpad.PREVIOUS_BASE + ("quote.js",))
+        launchpad.manifest_identity(
+            manifest(awesome_only, PREVIOUS_PRIVILEGES), previous, previous=True
+        )
+        mixed = manifest(
+            ORIGINS + ("https://g1.globo.com", launchpad.NEWS_IMAGE_ORIGIN),
+            PREVIOUS_PRIVILEGES,
         )
         with self.assertRaisesRegex(ValueError, "network access"):
-            launchpad.manifest_identity(mixed, resources, previous=True)
+            launchpad.manifest_identity(
+                mixed,
+                dict.fromkeys(launchpad.PREVIOUS_BASE + ("quote.js", "news.js")),
+                previous=True,
+            )
 
-        previous = self.resources | {
-            "config.xml": RSS_NEWS_MANIFEST,
-            "news.js": b"window.testNews = true;",
-        }
-        write_widget(self.widget, signed_members(previous))
-        files = launchpad.signed_widget_resources(self.widget, previous=True)[1]
-        self.assertEqual(files["news.js"], b"window.testNews = true;")
+    def test_rejects_wrong_identity_profile_entry_and_privileges(self):
+        for before, after in (
+            (b'package="Gxqk7W2na5"', b'package="short"'),
+            (b'id="Gxqk7W2na5.Shortcuts"', b'id="OtherPkg12.Shortcuts"'),
+            (b'required_version="9.0"', b'required_version="8.0"'),
+            (b'name="tv"', b'name="mobile"'),
+            (b'src="index.html"', b'src="https://example.com/"'),
+            (b"privilege/tv.window", b"privilege/internet"),
+            (b"privilege/tv.window", b"privilege/application.launch"),
+            (b"https://api.open-meteo.com", b"https://example.com"),
+            (b'subdomains="false"', b'subdomains="true"'),
+        ):
+            with self.subTest(after=after), self.assertRaises(ValueError):
+                launchpad.manifest_identity(MANIFEST.replace(before, after))
 
-    def test_layout_extras_cannot_be_symlinks(self):
-        layout = self.quote_layout()
-        (layout / "quote.js").unlink()
-        (layout / "quote.js").symlink_to(self.source / "ui.js")
-        with self.assertRaises(ValueError):
-            launchpad.source_files(self.source, layout)
+    def test_rejects_network_access_home_registration_and_ambiguous_manifest(self):
+        for entry in (
+            b'<access origin="*"/>',
+            b"<tizen:allow-navigation>https://example.com</tizen:allow-navigation>",
+            b"<tizen:app-control/>",
+            b'<tizen:application package="OtherPkg12" id="OtherPkg12.Other" required_version="9.0"/>',
+            b'<content src="other.html"/>',
+            b'<tizen:profile name="mobile"/>',
+            b'<tizen:privilege name="http://tizen.org/privilege/internet"/>',
+            b'<tizen:privilege name="http://tizen.org/privilege/filesystem.read"/>',
+        ):
+            with self.subTest(entry=entry), self.assertRaises(ValueError):
+                launchpad.manifest_identity(
+                    MANIFEST.replace(b"</widget>", entry + b"</widget>")
+                )
+
+    def test_rejects_altered_missing_extra_duplicate_and_foreign_resources(self):
+        changes = [
+            {"ui.js": b"altered code"},
+            {"config.xml": MANIFEST.replace(b"Gxqk7W2na5", b"OtherPkg12")},
+            {"extra.js": b"unexpected"},
+            {"../escape.js": b"unexpected"},
+        ]
+        for change in changes:
+            with self.subTest(change=list(change)), self.assertRaises(ValueError):
+                self.verify(signed_members(self.resources | change))
+        for missing in ("icon.png", "author-signature.xml", "signature1.xml"):
+            members = signed_members(self.resources)
+            del members[missing]
+            with self.subTest(missing=missing), self.assertRaises(ValueError):
+                self.verify(members)
+        with self.assertRaisesRegex(ValueError, "duplicate"):
+            self.verify(duplicate="ui.js")
+
+    def test_rejects_resource_symlinks_and_oversized_source(self):
+        resource = self.source / "ui.js"
+        resource.unlink()
+        resource.symlink_to(self.source / "device.js")
+        with self.assertRaisesRegex(ValueError, "resource"):
+            launchpad.source_files(self.source)
+        resource.unlink()
+        resource.write_bytes(b"x" * (1024 * 1024 + 1))
+        with self.assertRaisesRegex(ValueError, "resource"):
+            launchpad.source_files(self.source)
+
+    def test_command_requires_exactly_one_sdk_or_cli(self):
+        common = ["launchpad.py", "--profile", "Samshush", "--output", "build"]
+        with patch.object(launchpad, "build") as build:
+            for options in (
+                [],
+                ["--sdk", "sdk", "--cli", "wrapper"],
+                ["--sdk", "sdk", "--layout", "q65d-2123"],
+                ["--sdk", "sdk", "--weather-postcode", "90210"],
+            ):
+                with (
+                    self.subTest(options=options),
+                    patch.object(sys, "argv", common + options),
+                    contextlib.redirect_stderr(io.StringIO()),
+                    self.assertRaises(SystemExit) as result,
+                ):
+                    launchpad.main()
+                self.assertEqual(result.exception.code, 2)
+            build.assert_not_called()
+            for option in ("--sdk", "--cli"):
+                with (
+                    self.subTest(option=option),
+                    patch.object(sys, "argv", common + [option, "tool"]),
+                    contextlib.redirect_stdout(io.StringIO()),
+                ):
+                    launchpad.main()
+                path = Path("tool").resolve()
+                build.assert_called_with(
+                    path if option == "--sdk" else None,
+                    "Samshush",
+                    Path("build").resolve(),
+                    cli=path if option == "--cli" else None,
+                )
 
     def test_exact_resources_and_sdk_sha512_digests_are_structurally_valid(self):
         for algorithm in DIGESTS:
@@ -328,113 +397,6 @@ class LaunchpadTests(unittest.TestCase):
                 self.assertRaisesRegex(ValueError, "digest mismatch"),
             ):
                 self.verify(members)
-
-    def test_rejects_wrong_identity_profile_entry_and_privileges(self):
-        for before, after in (
-            (b'package="Gxqk7W2na5"', b'package="short"'),
-            (b'id="Gxqk7W2na5.Shortcuts"', b'id="OtherPkg12.Shortcuts"'),
-            (b'required_version="9.0"', b'required_version="8.0"'),
-            (b'name="tv"', b'name="mobile"'),
-            (b'src="index.html"', b'src="https://example.com/"'),
-            (b"privilege/tv.window", b"privilege/internet"),
-            (b"privilege/tv.window", b"privilege/application.launch"),
-            (b"https://api.open-meteo.com", b"https://example.com"),
-            (b'subdomains="false"', b'subdomains="true"'),
-        ):
-            with self.subTest(after=after), self.assertRaises(ValueError):
-                launchpad.manifest_identity(MANIFEST.replace(before, after))
-
-    def test_rejects_network_access_home_registration_and_ambiguous_manifest(self):
-        for entry in (
-            b'<access origin="*"/>',
-            b"<tizen:allow-navigation>https://example.com</tizen:allow-navigation>",
-            b"<tizen:app-control/>",
-            b'<tizen:application package="OtherPkg12" id="OtherPkg12.Other" required_version="9.0"/>',
-            b'<content src="other.html"/>',
-            b'<tizen:profile name="mobile"/>',
-            b'<tizen:privilege name="http://tizen.org/privilege/internet"/>',
-        ):
-            with self.subTest(entry=entry), self.assertRaises(ValueError):
-                launchpad.manifest_identity(
-                    MANIFEST.replace(b"</widget>", entry + b"</widget>")
-                )
-
-    def test_rejects_altered_missing_extra_duplicate_and_foreign_resources(self):
-        changes = [
-            {"ui.js": b"altered code"},
-            {"config.xml": MANIFEST.replace(b"Gxqk7W2na5", b"OtherPkg12")},
-            {"extra.js": b"unexpected"},
-            {"../escape.js": b"unexpected"},
-        ]
-        for change in changes:
-            with self.subTest(change=list(change)), self.assertRaises(ValueError):
-                self.verify(signed_members(self.resources | change))
-        for missing in ("icon.png", "author-signature.xml", "signature1.xml"):
-            members = signed_members(self.resources)
-            del members[missing]
-            with self.subTest(missing=missing), self.assertRaises(ValueError):
-                self.verify(members)
-        with self.assertRaisesRegex(ValueError, "duplicate"):
-            self.verify(duplicate="ui.js")
-
-    def test_generated_weather_config_is_signed_but_never_a_source_resource(self):
-        weather = b'{"latitude":40.0,"longitude":-70.0}\n'
-        resources = self.resources | {launchpad.WEATHER_CONFIG: weather}
-        self.assertEqual(
-            self.verify(signed_members(resources)).app, "Gxqk7W2na5.Shortcuts"
-        )
-        self.assertFalse((self.source / launchpad.WEATHER_CONFIG).exists())
-        members = signed_members(resources)
-        members[launchpad.WEATHER_CONFIG] = b"{}"
-        with self.assertRaisesRegex(ValueError, "digest mismatch"):
-            self.verify(members)
-
-    def test_rejects_invalid_weather_json_even_with_matching_signature_digests(self):
-        for weather in (
-            b"[]",
-            b'{"latitude":0}',
-            b'{"latitude":true,"longitude":0}',
-            b'{"latitude":91,"longitude":0}',
-            b'{"latitude":0,"longitude":-181}',
-            b'{"latitude":NaN,"longitude":0}',
-            b'{"latitude":0,"longitude":Infinity}',
-            b'{"latitude":0,"longitude":0,"postcode":"90210"}',
-            b'{"latitude":0,"longitude":0,"latitude":1}',
-            b'{"latitude":"40","longitude":0}',
-            b"{};alert(1)",
-            b" " * 1025,
-        ):
-            with self.subTest(weather=weather), self.assertRaises(ValueError):
-                self.verify(
-                    signed_members(self.resources | {launchpad.WEATHER_CONFIG: weather})
-                )
-
-    def test_previous_widget_accepts_only_known_legacy_or_current_package_shapes(self):
-        previous = {name: self.resources[name] for name in launchpad.LEGACY_RESOURCES}
-        previous["config.xml"] = LEGACY_MANIFEST
-        previous["ui.js"] = b"previous release"
-        write_widget(self.widget, signed_members(previous))
-        identity, files = launchpad.signed_widget_resources(self.widget, previous=True)
-        self.assertEqual(identity.app, "Gxqk7W2na5.Shortcuts")
-        self.assertEqual(files, previous)
-        weather = {k: v for k, v in self.resources.items() if k != "time-controls.js"}
-        weather["config.xml"] = WEATHER_MANIFEST
-        write_widget(self.widget, signed_members(weather))
-        self.assertEqual(
-            launchpad.signed_widget_resources(self.widget, previous=True)[1], weather
-        )
-        with self.assertRaises(ValueError):
-            launchpad.verify_widget(self.widget, self.source)
-        for changed in (
-            previous | {"config.xml": MANIFEST},
-            previous | {launchpad.WEATHER_CONFIG: b"{}"},
-            self.resources | {"config.xml": LEGACY_MANIFEST},
-            self.resources | {"config.xml": WEATHER_MANIFEST},
-            weather | {"config.xml": MANIFEST},
-        ):
-            write_widget(self.widget, signed_members(changed))
-            with self.subTest(resources=list(changed)), self.assertRaises(ValueError):
-                launchpad.signed_widget_resources(self.widget, previous=True)
 
     def test_rejects_incomplete_signatures_digests_and_resource_coverage(self):
         namespace = launchpad.DS_NS
@@ -483,17 +445,6 @@ class LaunchpadTests(unittest.TestCase):
             with self.subTest(length=len(data)), self.assertRaises(ValueError):
                 launchpad.parse_xml(data)
 
-    def test_rejects_resource_symlinks_and_oversized_source(self):
-        resource = self.source / "ui.js"
-        resource.unlink()
-        resource.symlink_to(self.source / "device.js")
-        with self.assertRaisesRegex(ValueError, "resource"):
-            launchpad.source_files(self.source)
-        resource.unlink()
-        resource.write_bytes(b"x" * (1024 * 1024 + 1))
-        with self.assertRaisesRegex(ValueError, "resource"):
-            launchpad.source_files(self.source)
-
     def sdk(self):
         sdk = self.root / "sdk"
         cli = sdk / "tools/ide/bin/tizen"
@@ -541,7 +492,6 @@ class LaunchpadTests(unittest.TestCase):
                 if name in launchpad.RESOURCES
             },
         )
-        self.assertEqual(receipt["weather"], {})
         self.assertEqual((output / "build.json").stat().st_mode & 0o777, 0o600)
         self.assertNotIn("existing-profile", (output / "build.json").read_text())
 
@@ -578,170 +528,6 @@ class LaunchpadTests(unittest.TestCase):
                     )
             run.assert_not_called()
         self.assertFalse(output.exists())
-
-    def test_command_requires_exactly_one_sdk_or_cli(self):
-        common = ["launchpad.py", "--profile", "Samshush", "--output", "build"]
-        with patch.object(launchpad, "build") as build:
-            for options in ([], ["--sdk", "sdk", "--cli", "wrapper"]):
-                with (
-                    self.subTest(options=options),
-                    patch.object(sys, "argv", common + options),
-                    contextlib.redirect_stderr(io.StringIO()),
-                    self.assertRaises(SystemExit) as result,
-                ):
-                    launchpad.main()
-                self.assertEqual(result.exception.code, 2)
-            build.assert_not_called()
-            for option in ("--sdk", "--cli"):
-                with (
-                    self.subTest(option=option),
-                    patch.object(sys, "argv", common + [option, "tool"]),
-                    contextlib.redirect_stdout(io.StringIO()),
-                ):
-                    launchpad.main()
-                path = Path("tool").resolve()
-                build.assert_called_with(
-                    path if option == "--sdk" else None,
-                    "Samshush",
-                    Path("build").resolve(),
-                    cli=path if option == "--cli" else None,
-                    weather_postcode=None,
-                    layout=None,
-                )
-            with (
-                patch.object(
-                    sys, "argv", common + ["--sdk", "tool", "--layout", "q65d-2123"]
-                ),
-                contextlib.redirect_stdout(io.StringIO()),
-            ):
-                launchpad.main()
-            self.assertEqual(
-                build.call_args.kwargs["layout"], launchpad.LAYOUTS / "q65d-2123"
-            )
-            for layout in ("missing", "../launcher", "Q65D"):
-                with (
-                    self.subTest(layout=layout),
-                    patch.object(
-                        sys, "argv", common + ["--sdk", "tool", "--layout", layout]
-                    ),
-                    contextlib.redirect_stderr(io.StringIO()),
-                    self.assertRaises(SystemExit) as result,
-                ):
-                    launchpad.main()
-                self.assertEqual(result.exception.code, 1)
-
-    def test_weather_postcode_build_generates_only_private_configuration(self):
-        coordinates = {"latitude": 34.0901, "longitude": -118.4065}
-        self.resources[launchpad.WEATHER_CONFIG] = (
-            b'{"latitude":34.0901,"longitude":-118.4065}\n'
-        )
-        with (
-            patch.object(
-                launchpad, "resolve_weather_postcode", return_value=coordinates
-            ) as resolve,
-            patch.object(launchpad.subprocess, "run", side_effect=self.sdk_result),
-        ):
-            artifact = launchpad.build(
-                self.sdk(),
-                "existing-profile",
-                self.root / "weather-build",
-                self.source,
-                weather_postcode="90210",
-            )
-        resolve.assert_called_once_with("90210")
-        self.assertFalse((self.source / launchpad.WEATHER_CONFIG).exists())
-        _, resources = launchpad.signed_widget_resources(artifact, self.source)
-        self.assertEqual(
-            launchpad.weather_config(resources[launchpad.WEATHER_CONFIG]), coordinates
-        )
-        receipt = json.loads((artifact.parent / "build.json").read_text())
-        self.assertEqual(receipt["weather_postcode"], "90210")
-        self.assertEqual(receipt["weather"], coordinates)
-
-    def test_signer_cannot_substitute_valid_but_unrequested_weather_coordinates(self):
-        def substitute(command, **kwargs):
-            result = self.sdk_result(command, **kwargs)
-            target = Path(command[command.index("-o") + 1]) / "Shortcuts.wgt"
-            changed = self.resources | {
-                launchpad.WEATHER_CONFIG: b'{"latitude":40,"longitude":-70}'
-            }
-            write_widget(target, signed_members(changed))
-            return result
-
-        output = self.root / "substituted-build"
-        with (
-            patch.object(launchpad.subprocess, "run", side_effect=substitute),
-            self.assertRaisesRegex(ValueError, "differs from this build"),
-        ):
-            launchpad.build(self.sdk(), "existing-profile", output, self.source)
-        self.assertEqual(list(output.iterdir()), [])
-
-    def test_postcode_lookup_is_bounded_and_validates_the_returned_area(self):
-        value = {
-            "post code": "90210",
-            "country abbreviation": "US",
-            "places": [{"latitude": "34.0901", "longitude": "-118.4065"}],
-        }
-        url = "https://api.zippopotam.us/us/90210"
-        response = SimpleNamespace(
-            status=200,
-            geturl=lambda: url,
-            read=lambda limit: json.dumps(value).encode(),
-        )
-        with patch.object(
-            launchpad.urllib.request,
-            "urlopen",
-            return_value=contextlib.nullcontext(response),
-        ) as request:
-            self.assertEqual(
-                launchpad.resolve_weather_postcode("90210"),
-                {"latitude": 34.0901, "longitude": -118.4065},
-            )
-        self.assertEqual(request.call_args.args[0].full_url, url)
-        self.assertEqual(request.call_args.kwargs, {"timeout": 10})
-        for changed in (
-            value | {"post code": "10001"},
-            value | {"country abbreviation": "CA"},
-            value | {"places": []},
-            value | {"places": [{"latitude": "NaN", "longitude": "0"}]},
-            value
-            | {
-                "places": [
-                    {"latitude": "0", "longitude": "0"},
-                    {"latitude": "1", "longitude": "1"},
-                ]
-            },
-        ):
-            response.read = lambda limit, data=changed: json.dumps(data).encode()
-            with (
-                self.subTest(data=changed),
-                patch.object(
-                    launchpad.urllib.request,
-                    "urlopen",
-                    return_value=contextlib.nullcontext(response),
-                ),
-                self.assertRaises(ValueError),
-            ):
-                launchpad.resolve_weather_postcode("90210")
-
-    def test_invalid_postcode_and_lookup_failure_never_silently_disable_weather(self):
-        with patch.object(launchpad.urllib.request, "urlopen") as request:
-            for postcode in ("", "9021", "90210-1234", "../../", "１２３４５"):
-                with self.subTest(postcode=postcode), self.assertRaises(ValueError):
-                    launchpad.resolve_weather_postcode(postcode)
-            request.assert_not_called()
-        for failure in (
-            TimeoutError(),
-            urllib.error.HTTPError(
-                "https://api.zippopotam.us/us/00000", 404, "Not Found", {}, None
-            ),
-        ):
-            with (
-                self.subTest(failure=failure),
-                patch.object(launchpad.urllib.request, "urlopen", side_effect=failure),
-                self.assertRaises(ValueError),
-            ):
-                launchpad.resolve_weather_postcode("00000")
 
     def test_partial_sdk_failures_never_promote_artifacts_or_success_receipts(self):
         sdk = self.sdk()
@@ -788,23 +574,14 @@ class LaunchpadDeviceTests(unittest.TestCase):
         self.root = Path(temporary.name)
         self.source = self.root / "launcher"
         self.source.mkdir()
-        self.resources = {
-            name: MANIFEST if name == "config.xml" else f"fixture {name}".encode()
-            for name in launchpad.RESOURCES
-        }
-        self.resources[launchpad.WEATHER_CONFIG] = b"{}\n"
+        self.resources = current_resources()
         for name, data in self.resources.items():
-            if name in launchpad.RESOURCES:
-                (self.source / name).write_bytes(data)
+            (self.source / name).write_bytes(data)
         self.widget = self.root / "Shortcuts.wgt"
         write_widget(self.widget, signed_members(self.resources))
         self.original_widget = self.widget.read_bytes()
         self.previous_widget = self.root / "Previous.wgt"
-        self.previous_resources = {
-            name: self.resources[name] for name in launchpad.LEGACY_RESOURCES
-        }
-        self.previous_resources["config.xml"] = LEGACY_MANIFEST
-        self.previous_resources["ui.js"] = b"previous installed release"
+        self.previous_resources = previous_resources()
         write_widget(self.previous_widget, signed_members(self.previous_resources))
         self.assets = self.root / "assets"
         (self.assets / "payloads").mkdir(parents=True)
@@ -813,8 +590,6 @@ class LaunchpadDeviceTests(unittest.TestCase):
                 b"helper fixture"
             )
         self.route_build = Q65D_BUILD
-        self.layouts = self.root / "layouts"
-        self.layouts.mkdir()
         self.routing_calls = []
         self.routing_targets = []
         self.verified_models = []
@@ -833,7 +608,6 @@ class LaunchpadDeviceTests(unittest.TestCase):
         self.route_package = "Gxqk7W2na5"
         self.route_app = "Gxqk7W2na5.Shortcuts"
         self.route_autostart = 0
-        self.installed_weather = b"{}\n"
         self.bad_probe = False
         self.bad_routing = False
         self.journal_raw = None
@@ -923,12 +697,6 @@ class LaunchpadDeviceTests(unittest.TestCase):
             elif "LAUNCHPAD_RESOURCES_VERIFIED" in script:
                 rc = int(self.fail_resources)
                 output = "LAUNCHPAD_PACKAGE_COUNT 1\nLAUNCHPAD_APP_COUNT 1\nLAUNCHPAD_RESOURCES_VERIFIED\n"
-                if "LAUNCHPAD_WEATHER_CONFIG" in script:
-                    output += (
-                        "LAUNCHPAD_WEATHER_CONFIG "
-                        + base64.b64encode(self.installed_weather).decode()
-                        + "\n"
-                    )
             elif "LAUNCHPAD_PACKAGE_COUNT" in script:
                 output = f"LAUNCHPAD_PACKAGE_COUNT {self.registration_count}\nLAUNCHPAD_APP_COUNT {self.registration_count}\n"
             elif "LAUNCHPAD_JOURNAL_ARCHIVED" in script:
@@ -990,16 +758,13 @@ class LaunchpadDeviceTests(unittest.TestCase):
         with contextlib.ExitStack() as stack:
             for target, value in (
                 ("launchpad.SOURCE", self.source),
-                ("launchpad.LAYOUTS", self.layouts),
                 (
                     "launchpad.source_files",
-                    lambda source=self.source, layout=None: source_files(
-                        source, layout
-                    ),
+                    lambda source=self.source: source_files(source),
                 ),
                 (
                     "launchpad.verify_widget",
-                    lambda path, layout=None: verify_widget(path, self.source, layout),
+                    lambda path: verify_widget(path, self.source),
                 ),
                 ("launchpad.verify_model", verify_model),
                 ("launchpad.device_command", lambda script: script),
@@ -1023,18 +788,11 @@ class LaunchpadDeviceTests(unittest.TestCase):
             b"q65d helper " + helper_build.encode("utf-16-le")
         )
         (helper / (launchpad_routing.NAME + ".runtimeconfig.json")).write_bytes(b"{}")
-        layout = self.layouts / "q65d-2123"
-        layout.mkdir(exist_ok=True)
-        (layout / "index.html").write_bytes(b"<!doctype html><title>Q65D</title>")
-        self.resources["index.html"] = (layout / "index.html").read_bytes()
-        write_widget(self.widget, signed_members(self.resources))
-        self.original_widget = self.widget.read_bytes()
         self.route_build = Q65D_BUILD
         policy = {
             "model": "QN55Q65DAGXZD",
             "build": Q65D_BUILD,
             "launchpad": {
-                "layout": "q65d-2123",
                 "helper": "payloads/q65d-2123",
                 "routing_hashes": Q65D_HASHES,
                 "verification": "fixture",
@@ -1081,8 +839,7 @@ class LaunchpadDeviceTests(unittest.TestCase):
         self.assertIn("differs", evidence["error"])
         self.assertFalse(any("mv --" in script for script in self.device_scripts))
 
-    def test_q65d_install_uses_its_build_helper_layout_and_model(self):
-        self.use_q65d()
+    def test_install_uses_the_profile_build_helper_and_model(self):
         result, evidence = self.run_operation("install")
         self.assertEqual(result, 0, evidence)
         self.assertEqual(self.verified_models, ["QN55Q65DAGXZD"])
@@ -1097,22 +854,19 @@ class LaunchpadDeviceTests(unittest.TestCase):
             self.assertIn(f"BUILD_ID={Q65D_BUILD}", script)
             self.assertNotIn(OTHER_BUILD, script)
 
-    def test_q65d_widget_must_carry_its_layout(self):
-        self.use_q65d()
-        self.resources["index.html"] = b"<!doctype html><title>Frame</title>"
+    def test_widget_must_match_the_checked_out_launcher(self):
+        self.resources["index.html"] = b"<!doctype html><title>Other</title>"
         write_widget(self.widget, signed_members(self.resources))
         with self.assertRaises(ValueError):
             self.run_operation("install")
         self.assertEqual(self.device_scripts, [])
 
     def test_q65d_status_accepts_its_own_receipt(self):
-        self.use_q65d()
         self.initial_phase = "applied"
         result, evidence = self.run_operation("status")
         self.assertEqual(result, 0, evidence)
 
     def test_q65d_status_rejects_a_receipt_from_another_build(self):
-        self.use_q65d()
         self.initial_phase = "applied"
         self.route_build = OTHER_BUILD
         result, evidence = self.run_operation("status")
@@ -1170,11 +924,6 @@ class LaunchpadDeviceTests(unittest.TestCase):
 
     def test_update_verifies_previous_and_new_resources_and_preserves_home(self):
         self.initial_phase = "applied"
-        weather = b'{"latitude":40.0,"longitude":-70.0}\n'
-        write_widget(
-            self.widget,
-            signed_members(self.resources | {launchpad.WEATHER_CONFIG: weather}),
-        )
         new_widget = self.widget.read_bytes()
         old_widget = self.previous_widget.read_bytes()
         result, evidence = self.run_operation("update")
@@ -1193,12 +942,16 @@ class LaunchpadDeviceTests(unittest.TestCase):
             if "LAUNCHPAD_RESOURCES_VERIFIED" in script
         ]
         self.assertEqual(len(resource_checks), 2)
-        self.assertIn(
-            hashlib.sha256(self.previous_resources["ui.js"]).hexdigest(),
-            resource_checks[0],
-        )
-        self.assertNotIn("weather-config.json", resource_checks[0])
-        self.assertIn(hashlib.sha256(weather).hexdigest(), resource_checks[1])
+        # The previous widget is checked with its Frame-era files and weather setting.
+        for name in ("ui.js", "water-lilies.jpg", launchpad.PREVIOUS_CONFIG):
+            self.assertIn(
+                hashlib.sha256(self.previous_resources[name]).hexdigest(),
+                resource_checks[0],
+            )
+        for data in self.resources.values():
+            self.assertIn(hashlib.sha256(data).hexdigest(), resource_checks[1])
+        self.assertNotIn("water-lilies.jpg", resource_checks[1])
+        self.assertNotIn(launchpad.PREVIOUS_CONFIG, resource_checks[1])
         self.assertEqual(len(self.sdk_calls), 1)
         self.assertEqual(
             self.sdk_calls[0][4:6], ("vd_appinstall", "Gxqk7W2na5.Shortcuts")
@@ -1206,10 +959,16 @@ class LaunchpadDeviceTests(unittest.TestCase):
 
     def test_update_accepts_a_previous_widget_with_the_retired_news_origin(self):
         self.initial_phase = "applied"
-        self.previous_resources = self.resources | {
-            "config.xml": RSS_NEWS_MANIFEST,
-            "news.js": b"previous news feed",
-        }
+        self.previous_resources = previous_resources(
+            modules=("quote.js", "news.js"),
+            origins=(
+                launchpad.WEATHER_ORIGIN,
+                launchpad.QUOTE_ORIGIN,
+                launchpad.TETHER_ORIGIN,
+                "https://g1.globo.com",
+            ),
+        )
+        self.previous_resources["news.js"] = b"previous news feed"
         write_widget(self.previous_widget, signed_members(self.previous_resources))
         result, evidence = self.run_operation("update")
         self.assertEqual(result, 0, evidence)
@@ -1366,21 +1125,6 @@ class LaunchpadDeviceTests(unittest.TestCase):
         self.assertIn("LAUNCHPAD_RESOURCES_VERIFIED", self.device_scripts[-1])
         self.assertEqual(self.pushes, [])
 
-    def test_launch_validates_private_weather_configuration_before_sdk(self):
-        self.sdk_output = "successfully launched"
-        self.installed_weather = b'{"latitude":40.0,"longitude":-70.0}'
-        result, evidence = self.run_operation("launch")
-        self.assertEqual(result, 0, evidence)
-        for report in (self.root / "reports").glob("*.json"):
-            report.unlink()
-        self.sdk_calls.clear()
-        self.installed_weather = (
-            b'{"latitude":40,"longitude":-70,"script":"unexpected"}'
-        )
-        result, evidence = self.run_operation("launch")
-        self.assertEqual(result, 1, evidence)
-        self.assertEqual(self.sdk_calls, [])
-
     def test_activate_checks_installed_resources_before_home_apply_and_status(self):
         result, evidence = self.run_operation("activate")
         self.assertEqual(result, 0, evidence)
@@ -1430,10 +1174,6 @@ class LaunchpadDeviceTests(unittest.TestCase):
         self.assertEqual(self.sdk_calls, [])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class LaunchTargetTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix="samshush-target-test-")
@@ -1448,42 +1188,20 @@ class LaunchTargetTests(unittest.TestCase):
             "model": "QN55Q65DAGXZD",
             "build": Q65D_BUILD,
             "launchpad": {
-                "layout": "q65d-2123",
                 "helper": "payloads/q65d-2123",
                 "routing_hashes": Q65D_HASHES,
                 "verification": "fixture",
             },
         }
 
-    def test_checked_in_q65d_profile_resolves_to_its_helper_and_layout(self):
+    def test_checked_in_profile_resolves_to_its_helper(self):
         policy = json.loads(frame.PROFILES["q65d-2123"].read_text())
         target = launchpad.launch_target(policy, frame.ASSETS)
         self.assertEqual(
             (target.model, target.build), (policy["model"], policy["build"])
         )
         self.assertEqual(target.helper, frame.ASSETS / "payloads/q65d-2123")
-        self.assertEqual(target.layout, launchpad.LAYOUTS / "q65d-2123")
         self.assertEqual(set(target.routing_hashes), set(launchpad_routing.HASHES))
-        files = launchpad.source_files(layout=target.layout)
-        for name in (
-            "config.xml",
-            "index.html",
-            "styles.css",
-            "ui.js",
-            "device.js",
-            "quote.js",
-            "sea.js",
-            "forecast.js",
-            "moon.js",
-        ):
-            self.assertEqual(files[name], (target.layout / name).read_bytes())
-        for name in ("weather.js", "time-controls.js", "icon.png", "water-lilies.jpg"):
-            self.assertEqual(files[name], (launchpad.SOURCE / name).read_bytes())
-        self.assertEqual(
-            launchpad.manifest_identity(files["config.xml"], files),
-            launchpad.manifest_identity((launchpad.SOURCE / "config.xml").read_bytes()),
-        )
-        self.assertNotIn(b"art-mode", files["index.html"])
         frame.verify_files()
 
     def test_unpinned_or_malformed_profiles_are_refused(self):
@@ -1492,13 +1210,12 @@ class LaunchTargetTests(unittest.TestCase):
             {k: v for k, v in self.policy.items() if k != "launchpad"},
             {"model": "QN55Q65DAGXZD", "build": Q65D_BUILD},
             self.policy | {"launchpad": pins | {"extra": True}},
+            self.policy | {"launchpad": pins | {"layout": "q65d-2123"}},
             self.policy
             | {"launchpad": {k: v for k, v in pins.items() if k != "verification"}},
             self.policy | {"launchpad": pins | {"helper": "../payloads/q65d-2123"}},
             self.policy | {"launchpad": pins | {"helper": "payloads/missing"}},
-            self.policy | {"launchpad": pins | {"layout": "../layouts"}},
-            self.policy | {"launchpad": pins | {"layout": "missing"}},
-            self.policy | {"build": "T-OTHERBLD-0090-REL-202601010000"},
+            self.policy | {"build": OTHER_BUILD},
         ):
             with (
                 self.subTest(policy=policy.get("launchpad")),
@@ -1506,9 +1223,6 @@ class LaunchTargetTests(unittest.TestCase):
             ):
                 launchpad.launch_target(policy, self.assets)
 
-    def test_layout_files_cannot_be_symlinks(self):
-        with tempfile.TemporaryDirectory() as directory:
-            layout = Path(directory)
-            (layout / "ui.js").symlink_to(launchpad.SOURCE / "ui.js")
-            with self.assertRaises(ValueError):
-                launchpad.source_files(layout=layout)
+
+if __name__ == "__main__":
+    unittest.main()

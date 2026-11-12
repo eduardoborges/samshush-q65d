@@ -5,7 +5,7 @@ const test = require("node:test");
 const vm = require("node:vm");
 
 const source = fs.readFileSync(
-  path.join(__dirname, "..", "layouts", "q65d-2123", "quote.js"),
+  path.join(__dirname, "..", "quote.js"),
   "utf8"
 );
 const DAY = 24 * 60 * 60 * 1000;

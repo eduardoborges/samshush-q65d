@@ -2,34 +2,54 @@
   "use strict";
 
   var actions = {
-    "apple-tv": { id: "apple-tv", type: "source", port: 1 },
-    "hdmi-2": { id: "hdmi-2", type: "source", port: 2 },
-    "hdmi-4": { id: "hdmi-4", type: "source", port: 4 },
+    "youtube": { id: "youtube", type: "app" },
+    "stremio": { id: "stremio", type: "app" },
+    "primevideo": { id: "primevideo", type: "app" },
+    "tvplus": { id: "tvplus", type: "app" },
+    "spotify": { id: "spotify", type: "app" },
     "settings": { id: "settings", type: "settings" },
-    "art-mode": { id: "art-mode", type: "art" }
+    "tv": { id: "tv", type: "source" },
+    "hdmi-2": { id: "hdmi-2", type: "source", port: 2 },
+    "hdmi-1": { id: "hdmi-1", type: "source", port: 1 }
   };
-  var tiles = Array.prototype.slice.call(document.querySelectorAll(".tile:not(:disabled)"));
+  // One row per shelf; Up and Down move between shelves and return to the column used last.
+  var rows = [];
+  var lastColumn = new WeakMap();
   var title = document.getElementById("selection-title");
   var error = document.getElementById("action-error");
   var clock = document.getElementById("clock");
+  var date = document.getElementById("date");
+  var weekdays = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
+    "sexta-feira", "sábado"];
+  var months = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto",
+    "setembro", "outubro", "novembro", "dezembro"];
   var adapter = window.LauncherDevice;
-  var schedule = window.LauncherSchedule;
-  var timeGroup = document.querySelector(".time-controls");
-  var controls = Array.from(timeGroup.querySelectorAll(".time-control"));
-  var art = tiles.find(function (tile) { return tile.dataset.id === "art-mode"; });
-  var savedTimes = null;
-  var scheduleBusy = false;
-  var retryTimer;
-  var selected = 0;
+  var current = { row: 0, column: 0 };
   var busy = false;
+  // After ten minutes without a key press the gradient fades to black to save power.
+  var restDelay = 10 * 60 * 1000;
+  var restTimer = null;
+
+  function collect() {
+    rows = Array.prototype.slice.call(document.querySelectorAll(".tiles")).map(function (shelf) {
+      return { shelf: shelf, tiles: Array.prototype.slice.call(shelf.querySelectorAll(".tile:not(:disabled)")) };
+    }).filter(function (row) { return row.tiles.length > 0; });
+  }
+
+  function allTiles() {
+    return rows.reduce(function (all, row) { return all.concat(row.tiles); }, []);
+  }
 
   function actionFor(tile) {
-    var action = actions[tile.dataset.id];
-    return Object.assign({}, action);
+    return Object.assign({}, actions[tile.dataset.id]);
+  }
+
+  function selectedTile() {
+    return rows[current.row].tiles[current.column];
   }
 
   function reportError(reason) {
-    error.textContent = reason && reason.message ? reason.message : "This action is unavailable.";
+    error.textContent = reason && reason.message ? reason.message : "Esta ação não está disponível.";
     error.hidden = false;
   }
 
@@ -39,31 +59,56 @@
     }
   }
 
-  function select(index, focus) {
-    if (index < 0 || index >= tiles.length) return false;
-    selected = index;
-    controls.forEach(function (control) { control.tabIndex = -1; });
-    tiles.forEach(function (tile, position) {
-      tile.classList.toggle("selected", position === selected);
-      tile.tabIndex = position === selected ? 0 : -1;
+  function select(row, column, focus) {
+    if (row < 0 || row >= rows.length) return false;
+    column = Math.max(0, Math.min(rows[row].tiles.length - 1, column));
+    current = { row: row, column: column };
+    lastColumn.set(rows[row].shelf, column);
+    var chosen = selectedTile();
+    allTiles().forEach(function (tile) {
+      tile.classList.toggle("selected", tile === chosen);
+      tile.tabIndex = tile === chosen ? 0 : -1;
     });
-    title.textContent = tiles[selected].querySelector(".tile-label").textContent;
+    title.textContent = chosen.getAttribute("aria-label");
     error.hidden = true;
     error.textContent = "";
-    if (focus) tiles[selected].focus();
-    notify("onSelection", actionFor(tiles[selected]));
+    if (focus) chosen.focus();
+    notify("onSelection", actionFor(chosen));
     return true;
+  }
+
+  function columnFor(row) {
+    var shelf = rows[row].shelf;
+    return lastColumn.has(shelf) ? lastColumn.get(shelf) : 0;
+  }
+
+  function move(step) {
+    var row = current.row + step;
+    if (row >= 0 && row < rows.length) select(row, columnFor(row), true);
+  }
+
+  function locate(tile) {
+    for (var row = 0; row < rows.length; row += 1) {
+      var column = rows[row].tiles.indexOf(tile);
+      if (column >= 0) return { row: row, column: column };
+    }
+    return null;
+  }
+
+  function selectId(id, focus) {
+    var place = locate(allTiles().filter(function (tile) { return tile.dataset.id === id; })[0]);
+    return place ? select(place.row, place.column, focus) : false;
   }
 
   function perform(method, action) {
     if (busy) return;
     error.hidden = true;
     if (!adapter || typeof adapter[method] !== "function") {
-      reportError(new Error("No TV connection."));
+      reportError(new Error("Sem conexão com a TV."));
       return;
     }
     busy = true;
-    var tile = tiles[selected];
+    var tile = selectedTile();
     tile.classList.add("pending");
     tile.setAttribute("aria-busy", "true");
     Promise.resolve().then(function () {
@@ -81,91 +126,35 @@
   }
 
   function activate() {
-    perform("activate", actionFor(tiles[selected]));
+    perform("activate", actionFor(selectedTile()));
   }
 
-  function displayTimes(pair) {
-    savedTimes = pair;
-    if (!pair && controls.includes(document.activeElement)) {
-      var message = error.hidden ? "" : error.textContent;
-      api.select("art-mode");
-      if (message) reportError(new Error(message));
-    }
-    timeGroup.hidden = !pair;
-    if (!pair) return;
-    controls.forEach(function (control) {
-      var minutes = pair[control.dataset.time];
-      var hour = Math.floor(minutes / 60);
-      var minute = minutes % 60;
-      var value = String(hour % 12 || 12) + (minute ? ":" + String(minute).padStart(2, "0") : "") +
-        (hour >= 12 ? " PM" : " AM");
-      control.querySelector(".time-value").textContent = value;
-      control.setAttribute("aria-valuenow", String(minutes));
-      control.setAttribute("aria-valuetext", value);
-    });
-  }
-
-  function refreshTimes() {
-    window.clearTimeout(retryTimer);
-    if (!schedule || !schedule.available || document.hidden || scheduleBusy) return;
-    scheduleBusy = true;
-    schedule.read().then(displayTimes, function () {
-      displayTimes(null);
-      if (!document.hidden) retryTimer = window.setTimeout(refreshTimes, 30000);
-    }).finally(function () { scheduleBusy = false; });
-  }
-
-  function adjustTime(control, step) {
-    if (!savedTimes || scheduleBusy) return;
-    var next = { start: savedTimes.start, end: savedTimes.end };
-    var field = control.dataset.time;
-    next[field] = (next[field] + step + 1440) % 1440;
-    if (next.start === next.end) {
-      reportError(new Error("Choose two different times."));
-      return;
-    }
-    error.hidden = true;
-    scheduleBusy = true;
-    control.setAttribute("aria-busy", "true");
-    schedule.set(savedTimes, next).then(function (confirmed) {
-      displayTimes(confirmed);
-      scheduleBusy = false;
-    }, function (reason) {
-      scheduleBusy = false;
-      reportError(reason);
-      refreshTimes();
-    }).finally(function () { control.removeAttribute("aria-busy"); });
-  }
-
-  function timeKey(event) {
-    var index = controls.indexOf(document.activeElement);
-    var key = {37:"ArrowLeft", 38:"ArrowUp", 39:"ArrowRight", 40:"ArrowDown", 13:"Enter"}[event.keyCode] || event.key;
-    if (index < 0) {
-      if (document.activeElement !== art || key !== "ArrowDown" || timeGroup.hidden) return false;
-      controls[0].focus();
-    } else if (key === "ArrowLeft" || key === "ArrowRight") {
-      if (!event.repeat) adjustTime(controls[index], key === "ArrowLeft" ? -60 : 60);
-    } else if (key === "ArrowUp" && index > 0) {
-      controls[index - 1].focus();
-    } else if (key === "ArrowDown") {
-      controls[Math.min(index + 1, controls.length - 1)].focus();
-    } else if (key === "ArrowUp" || key === "Enter" || key === "Escape" || key === "Backspace" ||
-        key === "BrowserBack" || event.keyCode === 10009) {
-      if (!event.repeat) api.select("art-mode");
-    } else return false;
-    return true;
-  }
-
+  // Runs every second but touches the page only when the minute changes.
   function updateClock() {
     var now = new Date();
-    var hour = now.getHours();
-    var minutes = String(now.getMinutes()).padStart(2, "0");
+    var time = String(now.getHours()).padStart(2, "0") + ":" + String(now.getMinutes()).padStart(2, "0");
+    var weekday = weekdays[now.getDay()];
+    var day = weekday.charAt(0).toUpperCase() + weekday.slice(1) + ", " +
+      now.getDate() + " de " + months[now.getMonth()];
+    if (clock.textContent === time && date.textContent === day) return;
+    now.setSeconds(0, 0);
     clock.dateTime = now.toISOString();
-    clock.textContent = (hour % 12 || 12) + ":" + minutes;
-    var period = document.createElement("span");
-    period.className = "period";
-    period.textContent = hour >= 12 ? "PM" : "AM";
-    clock.appendChild(period);
+    clock.textContent = time;
+    date.textContent = day;
+  }
+
+  function rest() {
+    document.body.classList.add("resting");
+  }
+
+  // Restarts the ten minutes and says whether the screen was resting, so the key that brings the
+  // gradient back does nothing else.
+  function wake() {
+    var resting = document.body.classList.contains("resting");
+    document.body.classList.remove("resting");
+    window.clearTimeout(restTimer);
+    restTimer = window.setTimeout(rest, restDelay);
+    return resting;
   }
 
   var api = {
@@ -175,42 +164,41 @@
       adapter = next;
       document.title = adapter && adapter.available === true ? "Home" : "Home — preview";
     },
-    select: function (id) {
-      return select(tiles.findIndex(function (tile) { return tile.dataset.id === id; }), true);
-    },
-    getSelection: function () { return actionFor(tiles[selected]); }
+    select: function (id) { return selectId(id, true); },
+    getSelection: function () { return actionFor(selectedTile()); }
   };
   window.LauncherUI = api;
 
-  tiles.forEach(function (tile, index) {
-    tile.addEventListener("focus", function () {
-      if (!tile.classList.contains("selected")) select(index, false);
-    });
-    tile.addEventListener("click", function () {
-      select(index, false);
-      activate();
-    });
+  document.addEventListener("focusin", function (event) {
+    var tile = event.target.closest && event.target.closest(".tile");
+    var place = tile && locate(tile);
+    if (place && !tile.classList.contains("selected")) select(place.row, place.column, false);
   });
-
-  controls.forEach(function (control) {
-    control.addEventListener("focus", function () {
-      select(tiles.indexOf(art), false);
-      art.classList.remove("selected");
-      art.tabIndex = -1;
-      control.tabIndex = 0;
-    });
+  document.addEventListener("click", function (event) {
+    var tile = event.target.closest && event.target.closest(".tile");
+    var place = tile && locate(tile);
+    if (!place) return;
+    select(place.row, place.column, false);
+    activate();
   });
 
   document.addEventListener("keydown", function (event) {
-    if (timeKey(event)) { event.preventDefault(); return; }
     var key = event.key;
     var code = event.keyCode;
-    if (key === "ArrowLeft" || code === 37) {
+    if (wake()) {
       event.preventDefault();
-      select(Math.max(0, selected - 1), true);
+    } else if (key === "ArrowLeft" || code === 37) {
+      event.preventDefault();
+      select(current.row, current.column - 1, true);
     } else if (key === "ArrowRight" || code === 39) {
       event.preventDefault();
-      select(Math.min(tiles.length - 1, selected + 1), true);
+      select(current.row, current.column + 1, true);
+    } else if (key === "ArrowUp" || code === 38) {
+      event.preventDefault();
+      move(-1);
+    } else if (key === "ArrowDown" || code === 40) {
+      event.preventDefault();
+      move(1);
     } else if (key === "Enter" || code === 13) {
       event.preventDefault();
       if (!event.repeat) activate();
@@ -221,16 +209,19 @@
   });
 
   document.addEventListener("visibilitychange", function () {
-    if (!document.hidden) {
-      updateClock();
-      select(selected, true);
-      refreshTimes();
+    if (document.hidden) {
+      window.clearTimeout(restTimer);
+      return;
     }
+    wake();
+    updateClock();
+    select(current.row, current.column, true);
   });
 
   api.setAdapter(adapter);
   updateClock();
   window.setInterval(updateClock, 1000);
-  select(0, true);
-  refreshTimes();
+  wake();
+  collect();
+  if (!selectId("youtube", true)) select(0, 0, true);
 }());

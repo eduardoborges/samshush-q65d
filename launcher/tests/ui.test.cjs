@@ -4,7 +4,7 @@ const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 
-const layout = path.join(__dirname, "..", "layouts", "q65d-2123");
+const layout = path.join(__dirname, "..");
 const source = fs.readFileSync(path.join(layout, "ui.js"), "utf8");
 const page = fs.readFileSync(path.join(layout, "index.html"), "utf8");
 

@@ -15,8 +15,6 @@ import secrets
 import shlex
 import subprocess
 import tempfile
-import urllib.error
-import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
 from dataclasses import dataclass
@@ -24,12 +22,40 @@ from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "launcher"
-# A layout holds only the files that differ from the Frame launcher.
-LAYOUTS = SOURCE / "layouts"
 WIDGET_NS = "{http://www.w3.org/ns/widgets}"
 TIZEN_NS = "{http://tizen.org/ns/widgets}"
 DS_NS = "{http://www.w3.org/2000/09/xmldsig#}"
-WEATHER_RESOURCES = (
+WEATHER_ORIGIN = "https://api.open-meteo.com"
+QUOTE_ORIGIN = "https://economia.awesomeapi.com.br"
+TETHER_ORIGIN = "https://api.binance.com"
+MARINE_ORIGIN = "https://marine-api.open-meteo.com"
+NEWS_ORIGIN = "https://falkor-cda.bastian.globo.com"
+NEWS_IMAGE_ORIGIN = "https://s2-g1.glbimg.com"
+# The only origins each module may reach. moon.js makes no network requests.
+MODULE_ORIGINS = {
+    "quote.js": (QUOTE_ORIGIN, TETHER_ORIGIN),
+    "sea.js": (MARINE_ORIGIN,),
+    "forecast.js": (WEATHER_ORIGIN,),
+    "moon.js": (),
+}
+RESOURCES = (
+    "config.xml",
+    "index.html",
+    "styles.css",
+    "ui.js",
+    "device.js",
+    "icon.png",
+) + tuple(MODULE_ORIGINS)
+SIGNATURES = ("author-signature.xml", "signature1.xml")
+PRIVILEGES = {
+    "http://tizen.org/privilege/application.launch",
+    "http://tizen.org/privilege/tv.window",
+    "http://tizen.org/privilege/internet",
+}
+# Widgets built before the Frame launcher was removed carried its base files, a
+# generated weather-config.json, extra privileges and some subset of the modules.
+# They are accepted only as the previous widget of an update.
+PREVIOUS_BASE = (
     "config.xml",
     "index.html",
     "styles.css",
@@ -38,34 +64,18 @@ WEATHER_RESOURCES = (
     "weather.js",
     "icon.png",
     "water-lilies.jpg",
+    "time-controls.js",
 )
-RESOURCES = WEATHER_RESOURCES + ("time-controls.js",)
-WEATHER_CONFIG = "weather-config.json"
-WEATHER_ORIGIN = "https://api.open-meteo.com"
-QUOTE_ORIGIN = "https://economia.awesomeapi.com.br"
-TETHER_ORIGIN = "https://api.binance.com"
-MARINE_ORIGIN = "https://marine-api.open-meteo.com"
-NEWS_ORIGIN = "https://falkor-cda.bastian.globo.com"
-NEWS_IMAGE_ORIGIN = "https://s2-g1.glbimg.com"
-# Modules a layout may add beyond the Frame resources, each with the only origins it
-# unlocks. An empty tuple marks a module that makes no network requests.
-LAYOUT_EXTRAS = {
-    "quote.js": (QUOTE_ORIGIN, TETHER_ORIGIN),
-    "sea.js": (MARINE_ORIGIN,),
-    "forecast.js": (WEATHER_ORIGIN,),
-    "news.js": (NEWS_ORIGIN, NEWS_IMAGE_ORIGIN),
-    "moon.js": (),
-}
-# Origins a module unlocked in an earlier release, accepted only in a previous widget.
+PREVIOUS_CONFIG = "weather-config.json"
+PREVIOUS_MODULE_ORIGINS = MODULE_ORIGINS | {"news.js": (NEWS_ORIGIN, NEWS_IMAGE_ORIGIN)}
+# Origins a module reached in an earlier release.
 RETIRED_ORIGINS = {
     "quote.js": (QUOTE_ORIGIN,),
     "news.js": ("https://g1.globo.com",),
 }
-LEGACY_RESOURCES = tuple(name for name in WEATHER_RESOURCES if name != "weather.js")
-SIGNATURES = ("author-signature.xml", "signature1.xml")
-PRIVILEGES = {
-    "http://tizen.org/privilege/application.launch",
-    "http://tizen.org/privilege/tv.window",
+PREVIOUS_PRIVILEGES = PRIVILEGES | {
+    "http://tizen.org/privilege/filesystem.read",
+    "http://tizen.org/privilege/filesystem.write",
 }
 
 
@@ -83,28 +93,14 @@ class Target:
     build: str
     routing_hashes: dict
     helper: Path
-    layout: Path | None
-
-
-def layout_directory(name):
-    if (
-        not isinstance(name, str)
-        or re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", name) is None
-    ):
-        raise ValueError("Invalid launcher layout name")
-    path = LAYOUTS / name
-    if path.is_symlink() or not path.is_dir():
-        raise ValueError(f"Unknown launcher layout: {name}")
-    return path
 
 
 def launch_target(policy, assets):
-    """The profile pins the routing libraries, helper and layout for its build."""
+    """The profile pins the routing libraries and helper for its build."""
     import launchpad_routing
 
     pins = policy.get("launchpad")
     if not isinstance(pins, dict) or set(pins) != {
-        "layout",
         "helper",
         "routing_hashes",
         "verification",
@@ -127,7 +123,6 @@ def launch_target(policy, assets):
         policy["build"],
         pins["routing_hashes"],
         assets / helper,
-        layout_directory(pins["layout"]),
     )
 
 
@@ -181,8 +176,10 @@ def parse_xml(data):
 
 def network_origins(resources, previous=False):
     """Every set of access origins the packaged modules allow together."""
-    allowed = [{WEATHER_ORIGIN} if "weather.js" in resources else set()]
-    for name, origins in LAYOUT_EXTRAS.items():
+    # The previous base carried weather.js, which used the forecast API.
+    allowed = [{WEATHER_ORIGIN} if previous else set()]
+    table = PREVIOUS_MODULE_ORIGINS if previous else MODULE_ORIGINS
+    for name, origins in table.items():
         if name not in resources:
             continue
         options = [set(origins)]
@@ -217,16 +214,7 @@ def manifest_identity(data, resources=RESOURCES, *, previous=False):
         raise ValueError("Unexpected widget entry point or TV profile")
     nodes = widget.findall(TIZEN_NS + "privilege")
     privileges = [node.get("name") for node in nodes]
-    permitted = PRIVILEGES.copy()
-    if "weather.js" in resources:
-        permitted.add("http://tizen.org/privilege/internet")
-    if "time-controls.js" in resources:
-        permitted.update(
-            {
-                "http://tizen.org/privilege/filesystem.read",
-                "http://tizen.org/privilege/filesystem.write",
-            }
-        )
+    permitted = PREVIOUS_PRIVILEGES if previous else PRIVILEGES
     if (
         len(privileges) != len(permitted)
         or set(privileges) != permitted
@@ -247,8 +235,7 @@ def manifest_identity(data, resources=RESOURCES, *, previous=False):
     )
     if not valid_access:
         raise ValueError(
-            "Launcher network access must be limited to the weather API and "
-            "the origins of packaged layout modules"
+            "Launcher network access must be limited to the origins of its modules"
         )
     if any(
         widget.findall(tag)
@@ -275,7 +262,7 @@ def unique_json_object(pairs):
 
 
 def weather_config(data):
-    """Accept only disabled weather or a coarse coordinate pair, never code."""
+    """A previous widget's generated weather setting: off or one coordinate pair."""
     if not isinstance(data, bytes) or not 0 < len(data) <= 1024:
         raise ValueError("Invalid weather configuration size")
     try:
@@ -299,100 +286,33 @@ def weather_config(data):
     return value
 
 
-def resolve_weather_postcode(postcode):
-    """Resolve one US postal area's centroid using the public Zippopotam.us API."""
-    if not isinstance(postcode, str) or re.fullmatch(r"[0-9]{5}", postcode) is None:
-        raise ValueError("Weather postcode must be five US ZIP-code digits")
-    request = urllib.request.Request(
-        f"https://api.zippopotam.us/us/{postcode}",
-        headers={"Accept": "application/json"},
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=10) as response:
-            if response.status != 200 or response.geturl() != request.full_url:
-                raise ValueError("Unexpected postcode lookup response")
-            data = response.read(64 * 1024 + 1)
-    except urllib.error.HTTPError as error:
-        if error.code == 404:
-            raise ValueError("Weather postcode was not found") from error
-        raise ValueError("Weather postcode lookup failed") from error
-    except (OSError, urllib.error.URLError) as error:
-        raise ValueError("Weather postcode lookup failed") from error
-    if len(data) > 64 * 1024:
-        raise ValueError("Postcode lookup response exceeds the size limit")
-    try:
-        value = json.loads(data.decode("utf-8"), object_pairs_hook=unique_json_object)
-        if (
-            not isinstance(value, dict)
-            or value.get("country abbreviation") != "US"
-            or value.get("post code") != postcode
-            or not isinstance(value.get("places"), list)
-            or not 0 < len(value["places"]) <= 100
-        ):
-            raise ValueError("Unexpected postcode lookup data")
-        coordinates = set()
-        for place in value["places"]:
-            if not isinstance(place, dict) or any(
-                not isinstance(place.get(key), str) or len(place[key]) > 64
-                for key in ("latitude", "longitude")
-            ):
-                raise ValueError("Invalid postcode coordinates")
-            pair = {key: float(place[key]) for key in ("latitude", "longitude")}
-            weather_config(json.dumps(pair, allow_nan=False).encode())
-            coordinates.add((pair["latitude"], pair["longitude"]))
-        if len(coordinates) != 1:
-            raise ValueError("Weather postcode has ambiguous coordinates")
-    except (UnicodeError, json.JSONDecodeError, TypeError, OverflowError) as error:
-        raise ValueError("Invalid postcode lookup data") from error
-    latitude, longitude = coordinates.pop()
-    return {"latitude": latitude, "longitude": longitude}
-
-
-def source_files(source=SOURCE, layout=None):
+def source_files(source=SOURCE):
     files = {}
     for name in RESOURCES:
         path = source / name
-        if layout is not None and (
-            (layout / name).exists() or (layout / name).is_symlink()
-        ):
-            path = layout / name
-        limit = (8 if name == "water-lilies.jpg" else 1) * 1024 * 1024
-        if path.is_symlink() or not path.is_file() or path.stat().st_size > limit:
-            raise ValueError(f"Missing or invalid launcher resource: {name}")
-        files[name] = path.read_bytes()
-    for name in LAYOUT_EXTRAS if layout is not None else ():
-        path = layout / name
-        if not (path.exists() or path.is_symlink()):
-            continue
         if path.is_symlink() or not path.is_file() or path.stat().st_size > 1024 * 1024:
-            raise ValueError(f"Invalid launcher layout resource: {name}")
+            raise ValueError(f"Missing or invalid launcher resource: {name}")
         files[name] = path.read_bytes()
     manifest_identity(files["config.xml"], files)
     return files
 
 
-def signed_widget_resources(path, source=SOURCE, *, previous=False, layout=None):
+def signed_widget_resources(path, source=SOURCE, *, previous=False):
     """Validate signed resources; previous releases need not match this checkout."""
-    expected = None if previous else source_files(source, layout)
+    expected = None if previous else source_files(source)
     if path.is_symlink() or not path.is_file() or path.stat().st_size > 8 * 1024 * 1024:
         raise ValueError("Invalid signed widget file")
     try:
         with zipfile.ZipFile(path) as archive:
             members = archive.infolist()
             names = [item.filename for item in members]
-            resources = (tuple(expected) if expected is not None else RESOURCES) + (
-                WEATHER_CONFIG,
-            )
             if previous:
-                extras = tuple(name for name in LAYOUT_EXTRAS if name in names)
-                for old in (
-                    LEGACY_RESOURCES,
-                    WEATHER_RESOURCES + (WEATHER_CONFIG,),
-                    RESOURCES + extras + (WEATHER_CONFIG,),
-                ):
-                    if set(names) == set(old + SIGNATURES):
-                        resources = old
-                        break
+                modules = tuple(
+                    name for name in PREVIOUS_MODULE_ORIGINS if name in names
+                )
+                resources = PREVIOUS_BASE + modules + (PREVIOUS_CONFIG,)
+            else:
+                resources = tuple(expected)
             if len(names) != len(set(names)) or set(names) != set(
                 resources + SIGNATURES
             ):
@@ -403,7 +323,7 @@ def signed_widget_resources(path, source=SOURCE, *, previous=False, layout=None)
                 item.file_size
                 > (
                     1024
-                    if item.filename == WEATHER_CONFIG
+                    if item.filename == PREVIOUS_CONFIG
                     else (8 if item.filename == "water-lilies.jpg" else 1) * 1024 * 1024
                 )
                 or item.flag_bits & 1
@@ -418,8 +338,8 @@ def signed_widget_resources(path, source=SOURCE, *, previous=False, layout=None)
     ):
         raise ValueError("Signed widget differs from current launcher source")
     identity = manifest_identity(actual["config.xml"], resources, previous=previous)
-    if WEATHER_CONFIG in resources:
-        weather_config(actual[WEATHER_CONFIG])
+    if previous:
+        weather_config(actual[PREVIOUS_CONFIG])
     for name in SIGNATURES:
         signature = parse_xml(actual[name])
         if signature.tag != DS_NS + "Signature":
@@ -462,14 +382,14 @@ def signed_widget_resources(path, source=SOURCE, *, previous=False, layout=None)
     return identity, {name: actual[name] for name in resources}
 
 
-def verify_widget(path, source=SOURCE, layout=None):
-    """Match static resources to this checkout and validate signed weather data.
+def verify_widget(path, source=SOURCE):
+    """Match static resources to this checkout.
 
     XML signature presence and resource digests are checked here. This is not
     cryptographic validation of Samsung's certificate chain; TV installation
     validates trust.
     """
-    return signed_widget_resources(path, source, layout=layout)[0]
+    return signed_widget_resources(path, source)[0]
 
 
 def build(
@@ -479,8 +399,6 @@ def build(
     source=SOURCE,
     *,
     cli=None,
-    weather_postcode=None,
-    layout=None,
 ):
     """Use the official packager without logging profile credentials."""
     if cli is None:
@@ -493,17 +411,7 @@ def build(
         raise ValueError("Official Tizen CLI is unavailable")
     if not profile or len(profile) > 128 or any(ord(char) < 32 for char in profile):
         raise ValueError("Invalid signing profile name")
-    files = source_files(source, layout)
-    coordinates = (
-        resolve_weather_postcode(weather_postcode)
-        if weather_postcode is not None
-        else {}
-    )
-    generated = (
-        json.dumps(coordinates, allow_nan=False, separators=(",", ":")).encode() + b"\n"
-    )
-    weather_config(generated)
-    files[WEATHER_CONFIG] = generated
+    files = source_files(source)
     output.mkdir(parents=True, exist_ok=False, mode=0o700)
     with tempfile.TemporaryDirectory(prefix="stage-", dir=output) as directory:
         stage = Path(directory)
@@ -544,11 +452,7 @@ def build(
                 "SDK signing failed; unlock the saved profile in Certificate Manager"
             )
         artifact = signed / "Shortcuts.wgt"
-        identity, signed_resources = signed_widget_resources(
-            artifact, source, layout=layout
-        )
-        if signed_resources[WEATHER_CONFIG] != generated:
-            raise ValueError("Signed weather configuration differs from this build")
+        identity, _ = signed_widget_resources(artifact, source)
         target = output / "Shortcuts.wgt"
         artifact.replace(target)
         target.chmod(0o600)
@@ -557,17 +461,10 @@ def build(
         "package_id": identity.package,
         "sha256": hashlib.sha256(target.read_bytes()).hexdigest(),
         "source_sha256": {
-            name: hashlib.sha256(data).hexdigest()
-            for name, data in files.items()
-            if name != WEATHER_CONFIG
+            name: hashlib.sha256(data).hexdigest() for name, data in files.items()
         },
-        "layout": layout.name if layout is not None else None,
-        "weather": coordinates,
-        "weather_config_sha256": hashlib.sha256(generated).hexdigest(),
         "installed": False,
     }
-    if weather_postcode is not None:
-        receipt["weather_postcode"] = weather_postcode
     receipt_path = output / "build.json"
     receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
     receipt_path.chmod(0o600)
@@ -578,7 +475,7 @@ def registration_script(
     identity, target, *, verify_resources=False, resources=None, previous=False
 ):
     """Read the one app's registration, optionally checking its installed resources."""
-    files = source_files(layout=target.layout) if resources is None else resources
+    files = source_files() if resources is None else resources
     if manifest_identity(files["config.xml"], files, previous=previous) != identity:
         raise ValueError("Launcher identity differs from this checkout")
 
@@ -604,10 +501,6 @@ root=/opt/usr/apps/{identity.package}/res/wgt
             script += (
                 f'[[ $(sha256sum "$root/{name}" | cut -d " " -f 1) == {digest} ]]\n'
             )
-        if WEATHER_CONFIG not in files and "weather.js" in files:
-            script += f"""[[ -f "$root/{WEATHER_CONFIG}" && ! -L "$root/{WEATHER_CONFIG}" && $(stat -c %s "$root/{WEATHER_CONFIG}") -le 1024 ]]
-printf 'LAUNCHPAD_WEATHER_CONFIG %s\\n' "$(base64 < "$root/{WEATHER_CONFIG}" | tr -d '\\n')"
-"""
         script += "echo LAUNCHPAD_RESOURCES_VERIFIED\n"
     return script
 
@@ -624,10 +517,7 @@ def run(args, frame):
     needs_widget = args.operation in {"install", "update", "activate"}
     previous_path = getattr(args, "previous_widget", None)
     if needs_widget:
-        if (
-            args.widget is None
-            or verify_widget(args.widget, layout=target.layout) != identity
-        ):
+        if args.widget is None or verify_widget(args.widget) != identity:
             raise ValueError("A matching signed --widget is required")
     elif args.widget is not None:
         raise ValueError("--widget is only used by install, update or activate")
@@ -665,7 +555,7 @@ def run(args, frame):
             frozen.write(widget_bytes)
             frozen_path = Path(frozen.name)
         frozen_identity, resources = signed_widget_resources(
-            frozen_path, SOURCE, previous=previous, layout=target.layout
+            frozen_path, SOURCE, previous=previous
         )
         if frozen_identity != identity:
             raise ValueError("Frozen widget identity differs from the launcher")
@@ -751,9 +641,6 @@ def run(args, frame):
         )
         if output.splitlines().count("LAUNCHPAD_RESOURCES_VERIFIED") != 1:
             raise ValueError("Missing launcher resource verification")
-        if resources is None:
-            encoded = marker(output, "LAUNCHPAD_WEATHER_CONFIG")
-            weather_config(base64.b64decode(encoded, validate=True))
 
     def checked_upload(script, marker):
         if execute(script).splitlines().count(marker) != 1:
@@ -942,14 +829,7 @@ def main():
     )
     parser.add_argument("--profile", required=True)
     parser.add_argument(
-        "--weather-postcode", help="US ZIP code for weather; omitted disables weather"
-    )
-    parser.add_argument(
         "--output", required=True, type=Path, help="Fresh private output directory"
-    )
-    parser.add_argument(
-        "--layout",
-        help="Launcher layout for a non-Frame TV, such as q65d-2123; omitted builds the Frame layout",
     )
     args = parser.parse_args()
     try:
@@ -958,8 +838,6 @@ def main():
             args.profile,
             args.output.resolve(),
             cli=args.cli.expanduser().resolve() if args.cli else None,
-            weather_postcode=args.weather_postcode,
-            layout=layout_directory(args.layout) if args.layout else None,
         )
     except (OSError, ValueError) as error:
         parser.exit(1, f"{error}\n")

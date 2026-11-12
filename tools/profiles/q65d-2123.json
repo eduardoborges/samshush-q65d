@@ -493,7 +493,6 @@
     "sdbd.service"
   ],
   "launchpad": {
-    "layout": "q65d-2123",
     "helper": "payloads/q65d-2123",
     "routing_hashes": {
       "/usr/lib/libaul.so.0": "483b96db6d3c52563d9dedfd466cfd6fe9a27ad0b6e15e615de923ffe83e83f1",
