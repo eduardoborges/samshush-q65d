@@ -16,10 +16,11 @@ the tools from working and may patch the root exploit.
 
 - macOS or Linux on the same LAN as the TV, preferably on one interface (see
   [troubleshooting](docs/troubleshooting.md))
-- [uv](https://docs.astral.sh/uv/) and Python 3.12 or 3.13
+- [mise](https://mise.jdx.dev/). It installs the versions pinned in `mise.toml`:
+  Python and uv, plus Node.js and the .NET SDK, which only the launcher tests and
+  the helper rebuild use.
 - Samsung's `sdb`, which ships with Tizen Studio
 - OpenSSL
-- Node.js, only to run the launcher tests
 
 ## Initial setup
 
@@ -29,11 +30,15 @@ the tools from working and may patch the root exploit.
    [Samsung's guide](https://developer.samsung.com/smarttv/develop/getting-started/using-sdk/tv-device.html)
    if the menus differ.
 
-2. Clone the fork and install the Python environment.
+2. Clone the fork and install the toolchain and the Python environment. The
+   commands in this guide assume mise is active in your shell. If it isn't,
+   prefix them with `mise exec --`.
 
    ```sh
    git clone https://github.com/eduardoborges/samshush.git
    cd samshush
+   mise trust
+   mise install
    uv sync --project tools --locked
    ```
 

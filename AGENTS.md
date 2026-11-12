@@ -25,8 +25,8 @@ hook outside the `startup` command.
 2. Find the TV through existing records, ARP, mDNS or SSDP. Confirm the model and
    build, and the host address that routes to it. SDB accepts only the address
    entered in Developer Mode ([troubleshooting](docs/troubleshooting.md)).
-3. Run `uv sync --project tools --locked`, then `samshush.py doctor`. Reuse the
-   existing SDB and OpenSSL installations.
+3. Run `mise install` and `uv sync --project tools --locked`, then
+   `samshush.py doctor`. Reuse the existing SDB and OpenSSL installations.
 4. Every TV command acquires temporary root, including `inspect`, `status` and the
    audits. Say so before running one.
 
@@ -90,7 +90,7 @@ IP addresses, the TV's name, its DUID, postcodes or raw logs in tracked files.
 
 ## Development
 
-Use Python 3.12 or 3.13 and uv. Run the checks in
+Take the toolchain from `mise.toml`. Run the checks in
 [docs/development.md](docs/development.md) before committing. Host tests use a fake
 TV; never contact the TV to check formatting or docs. Keep vendored bytes
 unchanged, and never add a command that runs arbitrary shell on the TV.

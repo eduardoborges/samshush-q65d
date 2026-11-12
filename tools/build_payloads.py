@@ -20,11 +20,10 @@ def main():
     parser.add_argument("--dotnet", type=Path, help="Path to the .NET 6 SDK executable")
     parser.add_argument("--output", type=Path, default=ROOT / ".local/payload-build")
     args = parser.parse_args()
-    cached = ROOT / ".local/toolchain/dotnet-sdk-6.0.428/dotnet"
-    dotnet = args.dotnet or (cached if cached.is_file() else shutil.which("dotnet"))
+    dotnet = args.dotnet or shutil.which("dotnet")
     if not dotnet:
         parser.error(
-            "Install the .NET 6 SDK or supply --dotnet; prebuilt assets do not need rebuilding"
+            "Run mise install or supply --dotnet; prebuilt assets do not need rebuilding"
         )
     env = os.environ | {
         "DOTNET_CLI_HOME": str(ROOT / ".local/dotnet-home"),
@@ -36,8 +35,8 @@ def main():
     version = subprocess.check_output(
         [str(dotnet), "--version"], text=True, timeout=15, env=env
     ).strip()
-    if version != "6.0.428":
-        parser.error(f"Expected SDK 6.0.428, got {version}")
+    if version != launchpad_routing.SDK:
+        parser.error(f"Expected SDK {launchpad_routing.SDK}, got {version}")
     args.output.mkdir(parents=True, exist_ok=False)
     result = {"sdk": version, "deployed": False, "helpers": []}
     for name in ("SamsungTvArchiveRoot", "SamsungTvRootAgent", "OwnerExec"):

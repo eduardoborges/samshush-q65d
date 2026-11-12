@@ -1,6 +1,7 @@
 import copy
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -381,12 +382,14 @@ internal static class RoutingTests {
 class NativeRoutingTransactionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.dotnet = (
-            Path(__file__).resolve().parents[2]
-            / ".local/toolchain/dotnet-sdk-6.0.428/dotnet"
-        )
-        if not cls.dotnet.is_file():
-            raise unittest.SkipTest("Pinned .NET SDK 6.0.428 unavailable")
+        cls.dotnet = shutil.which("dotnet")
+        version = ""
+        if cls.dotnet:
+            version = subprocess.run(
+                [cls.dotnet, "--version"], capture_output=True, text=True, timeout=15
+            ).stdout.strip()
+        if version != routing.SDK:
+            raise unittest.SkipTest(f"Pinned .NET SDK {routing.SDK} unavailable")
         cls.temp = tempfile.TemporaryDirectory(prefix="samshush-routing-tests-")
         cls.addClassCleanup(cls.temp.cleanup)
         cls.project = Path(cls.temp.name)

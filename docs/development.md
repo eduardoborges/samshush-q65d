@@ -26,17 +26,22 @@ contact a TV, and they do not prove anything about real capture or a real boot.
 | `tools/assets/` | Checksummed helper binaries. `SHA256SUMS.json` is checked before every command. |
 | `tools/vendor/` | The pinned samsung-tv-root transport. Keep its bytes and license unchanged. |
 | `launcher/` | The shortcut Home web app and its tests. |
-| `.local/` (ignored) | Toolchains, private reports, signed widgets and build output. |
+| `.local/` (ignored) | SDB, private reports, signed widgets and build output. |
 
-Runtime dependencies are the standard library plus the vendored transport. Use
-Python 3.12 or 3.13 and uv, and keep new dependencies deliberate. Never add a
-generic command that runs arbitrary shell on the TV.
+Runtime dependencies are the standard library plus the vendored transport. Add
+new ones only on purpose. `mise.toml` pins the toolchain; keep its Python inside
+the `requires-python` range in `tools/pyproject.toml`. uv uses that Python and
+never downloads its own. Never add a generic command that runs arbitrary shell on
+the TV.
 
 ## TV helpers
 
-`build_payloads.py` rebuilds the .NET helpers with SDK 6.0.428 into a fresh
-directory and compares them with the checked-in binaries. It never deploys
-anything, and the prebuilt assets don't need .NET on the host.
+`build_payloads.py` rebuilds the .NET helpers into a fresh directory with the
+`dotnet` on `PATH`, which has to be SDK 6.0.428 (mise installs it), and compares
+them with the checked-in binaries. `--dotnet` points it at another copy of the
+same SDK. It never deploys anything, and the prebuilt assets don't need .NET on
+the host. The routing transaction tests build the same helper and are skipped
+when that SDK is missing.
 
 ```sh
 uv run --project tools tools/build_payloads.py --output .local/payload-build-NEW

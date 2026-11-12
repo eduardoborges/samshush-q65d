@@ -1,0 +1,17 @@
+[tools]
+python = "3.13.18"
+uv = "0.13.7"
+# Only the launcher tests need Node.
+node = "26.13.1"
+# build_payloads.py rebuilds the checked-in helpers byte for byte, and only this
+# SDK does that. Isolated installs keep it out of a shared DOTNET_ROOT, where a
+# newer SDK would take over `dotnet`.
+dotnet = "6.0.428"
+
+[settings]
+dotnet.isolated = true
+
+[env]
+# uv uses the Python above instead of downloading its own.
+UV_PYTHON_PREFERENCE = "only-system"
+UV_PYTHON_DOWNLOADS = "never"

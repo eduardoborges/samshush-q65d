@@ -11,6 +11,8 @@ from pathlib import Path
 
 # The Q65D build compiled into the checked-in helper; source_for() swaps it for another build.
 BUILD = "T-NKLDUABC-0090-REL-202603190159"
+# The only SDK that rebuilds the checked-in helpers byte for byte. mise.toml pins the same one.
+SDK = "6.0.428"
 
 JOURNAL = "/opt/usr/share/samshush-home-v1"
 BUILD_PATTERN = r"T-[A-Z0-9]+-[0-9]{4}-REL-[0-9]{12}"
@@ -141,8 +143,8 @@ def build_helper(dotnet, output, build=BUILD):
     version = subprocess.check_output(
         [str(dotnet), "--version"], text=True, timeout=15, env=env
     ).strip()
-    if version != "6.0.428":
-        raise ValueError(f"Expected .NET SDK 6.0.428, got {version}")
+    if version != SDK:
+        raise ValueError(f"Expected .NET SDK {SDK}, got {version}")
     output.mkdir(parents=True, exist_ok=False)
     (output / f"{NAME}.cs").write_text(source_for(build))
     (output / f"{NAME}.csproj").write_text(PROJECT)
