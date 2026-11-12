@@ -35,8 +35,8 @@ the tools from working and may patch the root exploit.
    prefix them with `mise exec --`.
 
    ```sh
-   git clone https://github.com/eduardoborges/samshush.git
-   cd samshush
+   git clone https://github.com/eduardoborges/samshush-q65d.git
+   cd samshush-q65d
    mise trust
    mise install
    uv sync --project tools --locked
