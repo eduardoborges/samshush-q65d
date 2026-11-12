@@ -19,7 +19,7 @@ Update it after live work.
 | Remote PC, Gaming Hub backend | Apps denied launches and units masked on 2026-10-30. `gamepad-service` stopped during the Gaming Hub app apply; its bus name kept listening. |
 | Context data | `data-service` and both logger bus names masked on 2026-11-01. Logger calls then fail in about 30 ms instead of blocking, and the owner reported fast soundbar volume. |
 | Startup hook | Installed with nine scopes. `startup probe`, `run` and `status` passed. |
-| Shortcut Home | Installed, launched, assigned, restored, archived and assigned again on 2026-11-11. The owner confirmed every app tile, both HDMI inputs, live antenna TV, Settings, Back and the physical Home button. |
+| Shortcut Home | Installed, launched, assigned, restored, archived and assigned again on 2026-11-11. The owner confirmed every app tile, both HDMI inputs, live antenna TV, Settings, Back and the physical Home button. Version 0.4.0, without filesystem privileges, replaced it through `launchpad update` on 2026-11-12, and the owner confirmed the tiles and cards again. |
 
 ## Gaps
 
