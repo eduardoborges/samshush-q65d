@@ -41,7 +41,7 @@ function payload(overrides = {}) {
 }
 
 function element(id) {
-  const node = { id, hidden: id === "sea", textContent: "", children: [] };
+  const node = { id, hidden: id === "sea" || id === "sea-bath", textContent: "", children: [] };
   node.appendChild = child => { node.children.push(child); return child; };
   node.removeChild = child => { node.children.splice(node.children.indexOf(child), 1); return child; };
   Object.defineProperty(node, "firstChild", { get: () => node.children[0] || null });
@@ -50,7 +50,8 @@ function element(id) {
 
 function createSea(responses, now = NOW) {
   const elements = {};
-  for (const id of ["sea", "sea-waves", "sea-detail", "sea-chart", "sea-tide"]) elements[id] = element(id);
+  for (const id of ["sea", "sea-waves", "sea-detail", "sea-chart", "sea-tide", "sea-bath", "sea-bath-meter",
+    "sea-bath-name", "sea-bath-detail"]) elements[id] = element(id);
   const timers = new Map();
   let timerID = 0;
   const requests = [];
@@ -85,6 +86,7 @@ function createSea(responses, now = NOW) {
   return { sea: window.LauncherSea, elements, timers, requests, clock };
 }
 
+const plain = value => JSON.parse(JSON.stringify(value));
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
 function expiryTimer(h) {
@@ -108,6 +110,31 @@ test("shows waves, water and the next tides from the marine API", async () => {
     [["path", "tide-area"], ["path", "tide-line"], ["line", "tide-now-line"], ["circle", "tide-now"]]
   );
   assert.equal(h.elements["sea-chart"].children[3].attributes.cx, "75");
+});
+
+test("shows the bathing score for the tide on screen", async () => {
+  const h = createSea([payload()]);
+  await settle();
+  assert.equal(h.elements["sea-bath"].hidden, false);
+  assert.equal(h.elements["sea-bath-name"].textContent, "Ótimo");
+  assert.equal(h.elements["sea-bath-detail"].textContent, "maré 0,6 m");
+  assert.deepEqual(h.elements["sea-bath-meter"].children.map(node => node.attributes.class),
+    ["bath-on", "bath-on", "bath-on", "bath-on", "bath-on"]);
+});
+
+test("bathing gets worse as the tide rises, and a big swell takes off a point", () => {
+  const { sea } = createSea([new Error("offline")]);
+  const high = MIDNIGHT + 6 * HOUR;
+  const tides = [0, 1, 2, 3].map(n => ({ time: high + n * 6 * HOUR, level: n % 2 ? -1.25 : 1.25, high: n % 2 === 0 }));
+  const calm = { waves: 1.0, tides };
+  const swell = { waves: 1.5, tides };
+  assert.deepEqual(plain(sea.bathing(calm, high + 6 * HOUR)), { score: 5, name: "Ótimo", detail: "maré 0,1 m" });
+  assert.deepEqual(plain(sea.bathing(calm, high + 3 * HOUR)),
+    { score: 3, name: "Regular", detail: "maré 1,4 m · melhor ~12:00" });
+  assert.deepEqual(plain(sea.bathing(calm, high)), { score: 1, name: "Péssimo", detail: "maré 2,6 m · melhor ~12:00" });
+  assert.deepEqual(plain(sea.bathing(swell, high + 6 * HOUR)), { score: 4, name: "Bom", detail: "maré 0,1 m" });
+  assert.equal(sea.bathing(swell, high).score, 1);
+  assert.equal(sea.bathing(calm, high - HOUR), null);
 });
 
 test("finds each turn within two minutes and shifts it by the calibrated lag", () => {

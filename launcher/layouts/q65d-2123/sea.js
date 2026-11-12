@@ -19,6 +19,11 @@
   // Across 27 turns O POVO published for 3 to 11 Nov 2026, the table matched the model plus that
   // offset within 0.17 m. Heights add it and keep one decimal, like the table.
   var chartDatum = 1.35;
+  // Bathing at Poço da Draga scores 5 at a dry tide and 1 near the top of a spring tide. A swell
+  // of 1.5 m or more takes off a point.
+  var bathSteps = [0.6, 1.1, 1.6, 2.1];
+  var bathNames = ["Péssimo", "Ruim", "Regular", "Bom", "Ótimo"];
+  var bigSwell = 1.5;
   // The chart shows the past 6 hours and the next 18, on a fixed scale so spring tides look bigger.
   var chartBefore = 6 * hour;
   var chartAfter = 18 * hour;
@@ -32,6 +37,10 @@
   var detail = document.getElementById("sea-detail");
   var chart = document.getElementById("sea-chart");
   var tide = document.getElementById("sea-tide");
+  var bath = document.getElementById("sea-bath");
+  var bathMeter = document.getElementById("sea-bath-meter");
+  var bathName = document.getElementById("sea-bath-name");
+  var bathDetail = document.getElementById("sea-bath-detail");
   var refreshTimer = null;
   var expiryTimer = null;
   var busy = false;
@@ -126,6 +135,20 @@
     return (Math.round(value * 10) / 10).toFixed(1).replace(".", ",") + " m";
   }
 
+  function bathing(sea, now) {
+    var level = levelAt(sea.tides, now);
+    if (level === null) return null;
+    var height = level + chartDatum;
+    var score = 5 - bathSteps.filter(function (step) { return height > step; }).length;
+    if (sea.waves >= bigSwell) score = Math.max(1, score - 1);
+    var low = sea.tides.filter(function (turn) { return !turn.high && turn.time > now; })[0];
+    return {
+      score: score,
+      name: bathNames[score - 1],
+      detail: "maré " + meters(height) + (score < 4 && low ? " · melhor ~" + clock(low.time) : "")
+    };
+  }
+
   function format(sea, now) {
     var next = sea.tides.filter(function (turn) { return turn.time > now; }).slice(0, 2);
     if (next.length < 2) return null;
@@ -135,7 +158,8 @@
         (sea.water === null ? "" : " · água " + Math.round(sea.water) + " °C"),
       tide: next.map(function (turn) {
         return (turn.high ? "Alta" : "Baixa") + " ~" + clock(turn.time) + " " + meters(turn.level + chartDatum);
-      }).join(" · ")
+      }).join(" · "),
+      bath: bathing(sea, now)
     };
   }
 
@@ -156,30 +180,45 @@
     return points;
   }
 
-  function shape(name, attributes) {
+  function shape(parent, name, attributes) {
     var node = document.createElementNS(svg, name);
     Object.keys(attributes).forEach(function (key) { node.setAttribute(key, String(attributes[key])); });
-    chart.appendChild(node);
+    parent.appendChild(node);
+  }
+
+  function clear(parent) {
+    while (parent.firstChild) parent.removeChild(parent.firstChild);
   }
 
   function draw(sea, now) {
-    while (chart.firstChild) chart.removeChild(chart.firstChild);
+    clear(chart);
     var points = chartPoints(sea, now);
     if (points.length < 2) return;
     var line = points.map(function (point) { return point.x + " " + point.y; }).join(" L");
     var first = points[0];
     var last = points[points.length - 1];
-    shape("path", {
+    shape(chart, "path", {
       class: "tide-area",
       d: "M" + first.x + " " + chartHeight + " L" + line + " L" + last.x + " " + chartHeight + " Z"
     });
-    shape("path", { class: "tide-line", d: "M" + line });
+    shape(chart, "path", { class: "tide-line", d: "M" + line });
     var x = chartWidth * chartBefore / (chartBefore + chartAfter);
     var marker = points.reduce(function (best, point) {
       return Math.abs(point.x - x) < Math.abs(best.x - x) ? point : best;
     });
-    shape("line", { class: "tide-now-line", x1: marker.x, x2: marker.x, y1: 0, y2: chartHeight });
-    shape("circle", { class: "tide-now", cx: marker.x, cy: marker.y, r: 5 });
+    shape(chart, "line", { class: "tide-now-line", x1: marker.x, x2: marker.x, y1: 0, y2: chartHeight });
+    shape(chart, "circle", { class: "tide-now", cx: marker.x, cy: marker.y, r: 5 });
+  }
+
+  function drawBath(rating) {
+    clear(bathMeter);
+    bath.hidden = !rating;
+    if (!rating) return;
+    for (var dot = 0; dot < 5; dot += 1) {
+      shape(bathMeter, "circle", { class: dot < rating.score ? "bath-on" : "bath-off", cx: 6 + dot * 16, cy: 6, r: 5 });
+    }
+    bathName.textContent = rating.name;
+    bathDetail.textContent = rating.detail;
   }
 
   function hide() {
@@ -196,6 +235,7 @@
     detail.textContent = text.detail;
     tide.textContent = text.tide;
     draw(sea, now);
+    drawBath(text.bath);
     container.hidden = false;
     window.clearTimeout(expiryTimer);
     expiryTimer = window.setTimeout(hide, sea.time + maxAge - now);
@@ -254,11 +294,13 @@
     parse: parse,
     extremes: extremes,
     levelAt: levelAt,
+    bathing: bathing,
     format: format,
     refresh: refresh,
     stop: stop
   };
-  if (!container || !waves || !detail || !chart || !tide || typeof window.fetch !== "function" ||
+  if (!container || !waves || !detail || !chart || !tide || !bath || !bathMeter || !bathName || !bathDetail ||
+      typeof window.fetch !== "function" ||
       typeof window.AbortController !== "function" || typeof document.createElementNS !== "function") return;
   document.addEventListener("visibilitychange", visibilityChanged);
   refresh();
