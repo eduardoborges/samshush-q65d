@@ -505,14 +505,14 @@ root=/opt/usr/apps/{identity.package}/res/wgt
     return script
 
 
-def run(args, frame):
+def run(args, cli):
     """Device operations stay separate from packaging and from privacy controls."""
     from samsung_tv_root.archive_root import probe
     from samsung_tv_root.sdb import SdbClient, find_sdb
 
     import launchpad_routing
 
-    target = launch_target(frame.policy(), frame.ASSETS)
+    target = launch_target(cli.policy(), cli.ASSETS)
     identity = manifest_identity((SOURCE / "config.xml").read_bytes())
     needs_widget = args.operation in {"install", "update", "activate"}
     previous_path = getattr(args, "previous_widget", None)
@@ -591,12 +591,12 @@ def run(args, frame):
                 accept_timeout=180,
                 command_timeout=90,
                 commands=(device_command(script),),
-                payloads=frame.ASSETS / "payloads",
+                payloads=cli.ASSETS / "payloads",
             )
         )
         evidence["results"].append(result)
         save()
-        frame.check_result(result)
+        cli.check_result(result)
         commands = result.get("commands", [])
         if len(commands) != 1:
             raise ValueError("Incomplete launcher operation evidence")

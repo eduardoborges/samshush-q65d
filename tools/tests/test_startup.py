@@ -15,7 +15,7 @@ from pathlib import Path
 
 BASE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BASE))
-import frame  # noqa: E402
+import samshush  # noqa: E402
 import startup  # noqa: E402
 
 
@@ -397,7 +397,7 @@ exit 0
         self.assertEqual(self.run_shell(launch).returncode, 4)
 
     def test_bundle_scripts_have_valid_shell_and_short_interpreter_line(self):
-        package = startup.bundle(frame.policy(), frame.render)
+        package = startup.bundle(samshush.policy(), samshush.render)
         with tarfile.open(fileobj=io.BytesIO(package)) as archive:
             for member in archive.getmembers():
                 if member.name in ("worker", "launch") or member.name.endswith(
@@ -420,8 +420,8 @@ exit 0
     def test_boot_stops_model_installer_before_larger_batches_without_losing_scopes(
         self,
     ):
-        policy = frame.policy()
-        package = startup.bundle(policy, frame.render)
+        policy = samshush.policy()
+        package = startup.bundle(policy, samshush.render)
         with tarfile.open(fileobj=io.BytesIO(package)) as archive:
             rows = archive.extractfile("candidates").read().decode().splitlines()
         names = [row.split("\t")[0] for row in rows]

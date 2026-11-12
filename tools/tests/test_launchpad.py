@@ -16,9 +16,9 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import frame  # noqa: E402
 import launchpad  # noqa: E402
 import launchpad_routing  # noqa: E402
+import samshush  # noqa: E402
 
 Q65D_BUILD = "T-NKLDUABC-0090-REL-202603190159"
 OTHER_BUILD = "T-OTHERBLD-0090-REL-202601010000"
@@ -611,9 +611,9 @@ class LaunchpadDeviceTests(unittest.TestCase):
         self.bad_probe = False
         self.bad_routing = False
         self.journal_raw = None
-        self.fake_frame = SimpleNamespace(
+        self.fake_cli = SimpleNamespace(
             ASSETS=self.assets,
-            check_result=frame.check_result,
+            check_result=samshush.check_result,
         )
         self.use_q65d()
 
@@ -775,7 +775,7 @@ class LaunchpadDeviceTests(unittest.TestCase):
             ):
                 stack.enter_context(patch(target, value))
             stack.enter_context(patch("builtins.print"))
-            result = launchpad.run(args, self.fake_frame)
+            result = launchpad.run(args, self.fake_cli)
         reports = list(args.logs.glob("*.json"))
         self.assertEqual(len(reports), 1)
         self.assertEqual(reports[0].stat().st_mode & 0o777, 0o600)
@@ -798,7 +798,7 @@ class LaunchpadDeviceTests(unittest.TestCase):
                 "verification": "fixture",
             },
         }
-        self.fake_frame.policy = lambda: policy
+        self.fake_cli.policy = lambda: policy
         return policy
 
     def test_archive_saves_and_moves_only_a_verified_restored_journal(self):
@@ -1195,14 +1195,14 @@ class LaunchTargetTests(unittest.TestCase):
         }
 
     def test_checked_in_profile_resolves_to_its_helper(self):
-        policy = json.loads(frame.PROFILES["q65d-2123"].read_text())
-        target = launchpad.launch_target(policy, frame.ASSETS)
+        policy = json.loads(samshush.PROFILES["q65d-2123"].read_text())
+        target = launchpad.launch_target(policy, samshush.ASSETS)
         self.assertEqual(
             (target.model, target.build), (policy["model"], policy["build"])
         )
-        self.assertEqual(target.helper, frame.ASSETS / "payloads/q65d-2123")
+        self.assertEqual(target.helper, samshush.ASSETS / "payloads/q65d-2123")
         self.assertEqual(set(target.routing_hashes), set(launchpad_routing.HASHES))
-        frame.verify_files()
+        samshush.verify_files()
 
     def test_unpinned_or_malformed_profiles_are_refused(self):
         pins = self.policy["launchpad"]

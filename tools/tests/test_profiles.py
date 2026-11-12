@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import device_scripts  # noqa: E402
-import frame  # noqa: E402
+import samshush  # noqa: E402
 import startup  # noqa: E402
 
 
@@ -123,11 +123,11 @@ class ProfileTests(unittest.TestCase):
                 "preimages": {str(component): hashlib.sha256(b"original").hexdigest()},
             }
             guard = (
-                frame.device_identity(policy)
+                samshush.device_identity(policy)
                 .replace("/etc/os-release", str(release))
                 .replace("/etc/prd_info.ini", str(product))
             )
-            guard += frame.preimages(policy, [str(component)])
+            guard += samshush.preimages(policy, [str(component)])
             guard += f"touch '{marker}'\n"
             for case in (
                 "valid",
@@ -187,12 +187,12 @@ sha256sum() {
                     self.assertEqual(marker.exists(), case == "valid")
 
     def test_trial_is_isolated_and_batch_requires_restoration_evidence(self):
-        with patch.object(frame, "ACTIVE_PROFILE", "q65d-2123"):
-            policy = frame.policy()
-            trial = frame.render_trial()
-            batch = frame.render_apps("apply")
-            runtime = frame.base64.b64decode(
-                frame.render("apply", "voice").split()[2]
+        with patch.object(samshush, "ACTIVE_PROFILE", "q65d-2123"):
+            policy = samshush.policy()
+            trial = samshush.render_trial()
+            batch = samshush.render_apps("apply")
+            runtime = samshush.base64.b64decode(
+                samshush.render("apply", "voice").split()[2]
             ).decode()
             for script in (trial, batch, runtime):
                 subprocess.run(["/bin/bash", "-n"], input=script, text=True, check=True)
@@ -213,25 +213,27 @@ sha256sum() {
             self.assertNotIn("farfieldvoice.service", runtime)
 
     def test_rejects_unvalidated_runtime_scopes(self):
-        with patch.object(frame, "ACTIVE_PROFILE", "q65d-2123"):
+        with patch.object(samshush, "ACTIVE_PROFILE", "q65d-2123"):
             for scope in ("certificates", "services", "both"):
                 with self.subTest(scope=scope), self.assertRaises(ValueError):
-                    frame.render("apply", scope)
+                    samshush.render("apply", scope)
 
     def test_q65d_groups_pin_their_preimages(self):
-        with patch.object(frame, "ACTIVE_PROFILE", "q65d-2123"):
-            for group, entry in frame.policy()["optional_controls"].items():
+        with patch.object(samshush, "ACTIVE_PROFILE", "q65d-2123"):
+            for group, entry in samshush.policy()["optional_controls"].items():
                 with self.subTest(group=group):
                     if entry["application_ids"]:
-                        frame.render_apps("apply", group=group)
+                        samshush.render_apps("apply", group=group)
                     if entry["systemd_units"]:
-                        frame.render("apply", "services", unit_group=group)
+                        samshush.render("apply", "services", unit_group=group)
             self.assertIn(
                 "f0ce64bec4c83731ebb7f9fd1baba8c1d99e0a98e9bbbef97a5a5649ed247f94",
-                frame.render_apps("apply", group="gaming-backend"),
+                samshush.render_apps("apply", group="gaming-backend"),
             )
-            script = frame.render("apply", "services", unit_group="analytics-context")
-            decoded = frame.base64.b64decode(script.split()[2]).decode()
+            script = samshush.render(
+                "apply", "services", unit_group="analytics-context"
+            )
+            decoded = samshush.base64.b64decode(script.split()[2]).decode()
             self.assertIn("STOP_GRACE_SECONDS=20", decoded)
             self.assertIn("/usr/bin/data-service", decoded)
             self.assertIn(
@@ -250,30 +252,30 @@ sha256sum() {
         for profile in ("q65d-2123",):
             with (
                 self.subTest(profile=profile),
-                patch.object(frame, "ACTIVE_PROFILE", profile),
+                patch.object(samshush, "ACTIVE_PROFILE", profile),
             ):
-                package = startup.bundle(frame.policy(), frame.render)
+                package = startup.bundle(samshush.policy(), samshush.render)
                 with tarfile.open(fileobj=io.BytesIO(package)) as archive:
                     self.assertNotIn("packages.status", archive.getnames())
-                argv = ["frame.py", "--profile", profile, "--tv", "192.0.2.10"]
+                argv = ["samshush.py", "--profile", profile, "--tv", "192.0.2.10"]
                 with (
-                    patch.object(frame.sys, "argv", argv + ["packages", "status"]),
+                    patch.object(samshush.sys, "argv", argv + ["packages", "status"]),
                     patch("sys.stderr"),
                     self.assertRaises(SystemExit),
                 ):
-                    frame.main()
+                    samshush.main()
 
     def test_boot_package_contains_only_assessed_scopes(self):
         import io
         import tarfile
 
-        with patch.object(frame, "ACTIVE_PROFILE", "q65d-2123"):
+        with patch.object(samshush, "ACTIVE_PROFILE", "q65d-2123"):
             groups = [
                 name
-                for name, entry in frame.policy()["optional_controls"].items()
+                for name, entry in samshush.policy()["optional_controls"].items()
                 if entry["systemd_units"]
             ]
-            package = startup.bundle(frame.policy(), frame.render)
+            package = startup.bundle(samshush.policy(), samshush.render)
             with tarfile.open(fileobj=io.BytesIO(package)) as archive:
                 candidates = archive.extractfile("candidates").read().decode()
                 script = archive.extractfile("wifi-presence.apply").read().decode()
@@ -285,7 +287,7 @@ sha256sum() {
                 )
             self.assertNotIn("smarthub-ads", candidates)
             self.assertNotIn("certificates", candidates)
-            decoded = frame.base64.b64decode(script.split()[2]).decode()
+            decoded = samshush.base64.b64decode(script.split()[2]).decode()
             self.assertIn("STATE=/run/frame-services-wifi-presence-v1", decoded)
             subprocess.run(["/bin/bash", "-n"], input=decoded, text=True, check=True)
 
@@ -294,7 +296,7 @@ sha256sum() {
             return subprocess.run(
                 [
                     sys.executable,
-                    str(frame.HERE / "frame.py"),
+                    str(samshush.HERE / "samshush.py"),
                     "--profile",
                     profile,
                     "services",
@@ -315,7 +317,7 @@ sha256sum() {
             return subprocess.run(
                 [
                     sys.executable,
-                    str(frame.HERE / "frame.py"),
+                    str(samshush.HERE / "samshush.py"),
                     "--profile",
                     profile,
                     "apps",
@@ -333,16 +335,18 @@ sha256sum() {
         self.assertIn("invalid choice", run("q65d-2123", "art").stderr)
 
     def test_service_group_pins_unit_preimages(self):
-        with patch.object(frame, "ACTIVE_PROFILE", "q65d-2123"):
-            units = frame.policy()["optional_controls"]["wifi-presence"][
+        with patch.object(samshush, "ACTIVE_PROFILE", "q65d-2123"):
+            units = samshush.policy()["optional_controls"]["wifi-presence"][
                 "systemd_units"
             ]
-            decoded = frame.base64.b64decode(
-                frame.render("apply", "services", unit_group="wifi-presence").split()[2]
+            decoded = samshush.base64.b64decode(
+                samshush.render(
+                    "apply", "services", unit_group="wifi-presence"
+                ).split()[2]
             ).decode()
             for unit in units:
                 self.assertIn(
-                    frame.policy()["preimages"]["/usr/lib/systemd/system/" + unit],
+                    samshush.policy()["preimages"]["/usr/lib/systemd/system/" + unit],
                     decoded,
                 )
             self.assertIn("STATE=/run/frame-services-wifi-presence-v1", decoded)
@@ -350,13 +354,13 @@ sha256sum() {
             subprocess.run(["/bin/bash", "-n"], input=decoded, text=True, check=True)
 
     def test_app_group_pins_app_and_runtime_preimages(self):
-        with patch.object(frame, "ACTIVE_PROFILE", "q65d-2123"):
-            policy = frame.policy()
+        with patch.object(samshush, "ACTIVE_PROFILE", "q65d-2123"):
+            policy = samshush.policy()
             apps = policy["optional_controls"]["gaming-backend"]["application_ids"]
             self.assertEqual(
                 apps, ["com.samsung.tv.ghdaemon", "com.samsung.tv.ghservice"]
             )
-            script = frame.render_apps("apply", group="gaming-backend")
+            script = samshush.render_apps("apply", group="gaming-backend")
             for app in apps:
                 entry = policy["applications"][app]
                 for path in (entry["executable"], entry["manifest"]):

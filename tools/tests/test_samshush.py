@@ -11,10 +11,10 @@ from unittest.mock import patch
 
 BASE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BASE))
-spec = importlib.util.spec_from_file_location("frame", BASE / "frame.py")
-frame = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = frame
-spec.loader.exec_module(frame)
+spec = importlib.util.spec_from_file_location("samshush", BASE / "samshush.py")
+samshush = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = samshush
+spec.loader.exec_module(samshush)
 
 
 class HostTests(unittest.TestCase):
@@ -36,12 +36,12 @@ class HostTests(unittest.TestCase):
         ):
             with (
                 self.subTest(arguments=arguments),
-                patch.object(frame.sys, "argv", ["frame.py", *arguments]),
-                patch.object(frame, "verify_files") as verify,
+                patch.object(samshush.sys, "argv", ["samshush.py", *arguments]),
+                patch.object(samshush, "verify_files") as verify,
                 patch("sys.stderr", new_callable=io.StringIO),
                 self.assertRaises(SystemExit) as raised,
             ):
-                frame.main()
+                samshush.main()
             self.assertEqual(raised.exception.code, 2)
             verify.assert_not_called()
 
@@ -56,39 +56,39 @@ class HostTests(unittest.TestCase):
             "activate",
             "archive",
         ):
-            arguments = ["frame.py", "--tv", "192.0.2.1", "launchpad", operation]
+            arguments = ["samshush.py", "--tv", "192.0.2.1", "launchpad", operation]
             if operation in ("install", "update", "activate"):
                 arguments += ["--widget", "Shortcuts.wgt"]
             if operation == "update":
                 arguments += ["--previous-widget", "Previous.wgt"]
             with (
                 self.subTest(operation=operation),
-                patch.object(frame.sys, "argv", arguments),
-                patch.object(frame, "verify_files"),
+                patch.object(samshush.sys, "argv", arguments),
+                patch.object(samshush, "verify_files"),
                 patch("launchpad.run", return_value=0) as run,
             ):
-                self.assertEqual(frame.main(), 0)
+                self.assertEqual(samshush.main(), 0)
             self.assertEqual(run.call_args.args[0].operation, operation)
 
     def test_launchpad_runs_only_on_profiles_that_pin_it(self):
-        base = ["frame.py", "--tv", "192.0.2.1", "launchpad", "status"]
+        base = ["samshush.py", "--tv", "192.0.2.1", "launchpad", "status"]
         with (
-            patch.object(frame.sys, "argv", base),
-            patch.object(frame, "verify_files"),
+            patch.object(samshush.sys, "argv", base),
+            patch.object(samshush, "verify_files"),
             patch("launchpad.run", return_value=0) as run,
         ):
-            self.assertEqual(frame.main(), 0)
+            self.assertEqual(samshush.main(), 0)
         run.assert_called_once()
-        unpinned = {k: v for k, v in frame.policy().items() if k != "launchpad"}
+        unpinned = {k: v for k, v in samshush.policy().items() if k != "launchpad"}
         with (
-            patch.object(frame.sys, "argv", base),
-            patch.object(frame, "policy", return_value=unpinned),
-            patch.object(frame, "verify_files") as verify,
+            patch.object(samshush.sys, "argv", base),
+            patch.object(samshush, "policy", return_value=unpinned),
+            patch.object(samshush, "verify_files") as verify,
             patch("launchpad.run") as run,
             patch("sys.stderr", new_callable=io.StringIO),
             self.assertRaises(SystemExit) as raised,
         ):
-            frame.main()
+            samshush.main()
         self.assertEqual(raised.exception.code, 2)
         verify.assert_not_called()
         run.assert_not_called()
@@ -106,20 +106,20 @@ class HostTests(unittest.TestCase):
             with (
                 self.subTest(action=action),
                 patch.object(
-                    frame.sys, "argv", ["frame.py", "--tv", "192.0.2.1", *action]
+                    samshush.sys, "argv", ["samshush.py", "--tv", "192.0.2.1", *action]
                 ),
-                patch.object(frame, "verify_files") as verify,
+                patch.object(samshush, "verify_files") as verify,
                 patch("sys.stderr", new_callable=io.StringIO),
                 self.assertRaises(SystemExit) as raised,
             ):
-                frame.main()
+                samshush.main()
             self.assertEqual(raised.exception.code, 2)
             verify.assert_not_called()
 
     def test_voice_scope_excludes_unrelated_units(self):
-        policy = frame.policy()
-        encoded = frame.render("apply", "voice").split()[2]
-        script = frame.base64.b64decode(encoded).decode()
+        policy = samshush.policy()
+        encoded = samshush.render("apply", "voice").split()[2]
+        script = samshush.base64.b64decode(encoded).decode()
         self.assertIn("\n".join(policy["voice_privacy"]["systemd_units"]), script)
         for entry in policy["optional_controls"].values():
             for unit in entry["systemd_units"]:
@@ -127,10 +127,10 @@ class HostTests(unittest.TestCase):
         self.assertIn("SCOPE='voice'", script)
 
     def test_optional_groups_have_independent_state_and_valid_shell(self):
-        for group, entries in frame.policy()["optional_controls"].items():
+        for group, entries in samshush.policy()["optional_controls"].items():
             for action in ("apply", "status", "restore"):
                 if entries["application_ids"]:
-                    script = frame.render_apps(action, group=group)
+                    script = samshush.render_apps(action, group=group)
                     self.assertIn(
                         f"STATE=/opt/usr/home/owner/share/frame-apps-{group}-v1", script
                     )
@@ -141,8 +141,8 @@ class HostTests(unittest.TestCase):
                         ["/bin/bash", "-n"], input=script, text=True, check=True
                     )
                 if entries["systemd_units"]:
-                    script = frame.base64.b64decode(
-                        frame.render(action, "services", unit_group=group).split()[2]
+                    script = samshush.base64.b64decode(
+                        samshush.render(action, "services", unit_group=group).split()[2]
                     ).decode()
                     self.assertIn(f"STATE=/run/frame-services-{group}-v1", script)
                     self.assertIn("LOCK=/run/frame-runtime-v1.lock", script)
@@ -151,7 +151,7 @@ class HostTests(unittest.TestCase):
                     )
 
     def test_service_audit_is_complete_and_rejects_wrong_identity(self):
-        script = frame.render_service_audit()
+        script = samshush.render_service_audit()
         subprocess.run(["/bin/bash", "-n"], input=script, text=True, check=True)
         self.assertNotIn("@@", script)
         self.assertIn("data-service.service", script)
@@ -169,7 +169,7 @@ class HostTests(unittest.TestCase):
     def test_transport_preserves_script_literals(self):
         text = "printf '%s' 'spaces $HOME `false` ; \"quotes\"'"
         result = subprocess.run(
-            ["/bin/bash", "-c", frame.wrapped(text)],
+            ["/bin/bash", "-c", samshush.wrapped(text)],
             capture_output=True,
             text=True,
             check=True,
@@ -191,8 +191,8 @@ class HostTests(unittest.TestCase):
             )
             nsenter.chmod(0o700)
             with (
-                patch.object(frame.device_scripts, "RUNTIME", payload),
-                patch.object(frame, "policy", return_value=policy),
+                patch.object(samshush.device_scripts, "RUNTIME", payload),
+                patch.object(samshush, "policy", return_value=policy),
             ):
                 for action in ("status", "restore"):
                     with self.subTest(action=action):
@@ -200,7 +200,7 @@ class HostTests(unittest.TestCase):
                             [
                                 "/bin/bash",
                                 "-c",
-                                frame.wrapped(frame.render(action, "none")),
+                                samshush.wrapped(samshush.render(action, "none")),
                             ],
                             env=os.environ
                             | {"PATH": str(root) + ":" + os.environ["PATH"]},
@@ -213,7 +213,7 @@ class HostTests(unittest.TestCase):
     def test_native_app_scripts_and_reboot_readback(self):
         for action in ("apply", "status", "verify", "restore"):
             with self.subTest(action=action):
-                script = frame.render_apps(action)
+                script = samshush.render_apps(action)
                 subprocess.run(["/bin/bash", "-n"], input=script, text=True, check=True)
                 self.assertNotIn("@@", script)
                 if action == "verify":
@@ -224,13 +224,13 @@ class HostTests(unittest.TestCase):
                     )
         subprocess.run(
             ["/bin/bash", "-n"],
-            input=frame.device_scripts.STARTUP_GUARDS,
+            input=samshush.device_scripts.STARTUP_GUARDS,
             text=True,
             check=True,
         )
 
     def app_functions(self, root):
-        script = frame.render_apps("apply")
+        script = samshush.render_apps("apply")
         start = script.index("flag() {")
         end = script.index("verify_flags() {")
         return script[start:end].replace("/proc/", str(root / "proc") + "/")
@@ -288,8 +288,8 @@ class HostTests(unittest.TestCase):
                 self.assertEqual("SURVIVING MANAGED APP" in result.stdout, survives)
 
     def test_privacy_audit_has_valid_shell_and_requires_matching_build(self):
-        script = frame.device_scripts.PRIVACY_AUDIT.replace(
-            "@@BUILD@@", frame.policy()["build"]
+        script = samshush.device_scripts.PRIVACY_AUDIT.replace(
+            "@@BUILD@@", samshush.policy()["build"]
         )
         subprocess.run(["/bin/bash", "-n"], input=script, text=True, check=True)
         # Identity failure must stop before any device query.
@@ -303,7 +303,7 @@ class HostTests(unittest.TestCase):
         self.assertNotIn("PRIVACY AUDIT COMPLETE", result.stdout)
 
     def test_hdmi_device_count_is_bounded_and_checked(self):
-        script = frame.device_scripts.HDMI_AUDIT.replace("@@BUILD@@", "test")
+        script = samshush.device_scripts.HDMI_AUDIT.replace("@@BUILD@@", "test")
         subprocess.run(["/bin/bash", "-n"], input=script, text=True, check=True)
         parser = script[
             script.index("values=()") : script.index("query GetActiveDeviceName")
@@ -330,7 +330,7 @@ class HostTests(unittest.TestCase):
 
     def test_sound_sensor_uses_separate_recovery_state(self):
         for action in ("apply", "status", "verify", "restore"):
-            script = frame.render_apps(action, sound_sensor=True)
+            script = samshush.render_apps(action, sound_sensor=True)
             subprocess.run(["/bin/bash", "-n"], input=script, text=True, check=True)
             self.assertIn(
                 "STATE=/opt/usr/home/owner/share/frame-sound-sensor-v1", script
@@ -352,7 +352,7 @@ class HostTests(unittest.TestCase):
             staging_cleaned=True,
             commands=[{"exit_code": 0, "timed_out": False}],
         )
-        frame.check_result(good)
+        samshush.check_result(good)
         for bad in (
             {"commands": []},
             {"uid": 901},
@@ -361,44 +361,46 @@ class HostTests(unittest.TestCase):
             {"commands": [{"exit_code": 0, "timed_out": True}]},
         ):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
-                frame.check_result(good | bad)
+                samshush.check_result(good | bad)
 
     def test_checksum_rejects_tampering_and_path_escape(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp).resolve()
             (root / "file").write_text("original")
-            expected = frame.hashlib.sha256(b"original").hexdigest()
+            expected = samshush.hashlib.sha256(b"original").hexdigest()
             (root / "SHA256SUMS.json").write_text(json.dumps({"file": expected}))
-            with patch.object(frame, "ASSETS", root):
-                frame.verify_files()
+            with patch.object(samshush, "ASSETS", root):
+                samshush.verify_files()
                 (root / "file").write_text("changed")
                 with self.assertRaises(ValueError):
-                    frame.verify_files()
+                    samshush.verify_files()
                 (root / "SHA256SUMS.json").write_text(
                     json.dumps({"../escape": expected})
                 )
                 with self.assertRaises(ValueError):
-                    frame.verify_files()
+                    samshush.verify_files()
 
     def test_doctor_rejects_unrunnable_sdb(self):
         from samsung_tv_root import sdb
 
         with (
-            patch.object(frame.sys, "argv", ["frame.py", "doctor"]),
-            patch.object(frame, "verify_files"),
+            patch.object(samshush.sys, "argv", ["samshush.py", "doctor"]),
+            patch.object(samshush, "verify_files"),
             patch("sys.stdout", new_callable=io.StringIO),
             patch.object(sdb, "find_sdb", return_value=Path("/fake/sdb")),
-            patch.object(frame.subprocess, "run", side_effect=OSError("bad CPU type")),
+            patch.object(
+                samshush.subprocess, "run", side_effect=OSError("bad CPU type")
+            ),
         ):
-            self.assertEqual(frame.main(), 1)
+            self.assertEqual(samshush.main(), 1)
 
     def test_global_operations_enter_namespace_and_inspection_does_not(self):
         self.assertTrue(
-            frame.render("apply", "voice").endswith(
+            samshush.render("apply", "voice").endswith(
                 "nsenter --mount=/proc/1/ns/mnt /bin/bash"
             )
         )
-        self.assertTrue(frame.render("inspect", "none").startswith("# Generated"))
+        self.assertTrue(samshush.render("inspect", "none").startswith("# Generated"))
         for action, scope in (
             ("inspect", "none"),
             ("status", "none"),
@@ -407,7 +409,7 @@ class HostTests(unittest.TestCase):
         ):
             subprocess.run(
                 ["/bin/bash", "-n"],
-                input=frame.render(action, scope),
+                input=samshush.render(action, scope),
                 text=True,
                 check=True,
             )
