@@ -130,7 +130,7 @@
         "/usr/bin/ambient-ua-agent"
       ],
       "purpose": "Stop separate Wi-Fi motion and user-awareness services.",
-      "tradeoffs": "Presence-based automatic dimming, power saving and Art wake can be lost. Manual Art Mode and networking are retained.",
+      "tradeoffs": "Presence-based automatic dimming and power saving can be lost. Networking is retained.",
       "validation": "Live apply and mask readback passed on 2026-10-30. Retained features and a fresh reboot are not verified."
     },
     "analytics-context": {
@@ -501,6 +501,6 @@
       "/usr/lib/libcapi-appfw-app-operation-tv.so.0.1.0": "ff9e230125ccb797f6437631f2b79144d3d40980efe1dcc8a12bfaf2ca8e97f7",
       "/usr/lib/libcapi-appfw-app-control.so.0.23.0": "9289ee834e618079643be73df93365c8d3572b50b3b85c3c77d3dbebf915612e"
     },
-    "verification": "launchpad audit, 2026-11-11: Home defaults match the Frame (home and first screen com.samsung.tv.csfs, startup and backup org.tizen.tv-viewer, empty overlay). One tvctx-manager runs as root, and the .NET 6.0.9 runtime is present. On 2026-11-11 the app was installed, launched, assigned to Home, restored, archived and assigned again; the owner confirmed YouTube, Stremio, Settings, Back and the physical Home button. Reboot and standby persistence are untested."
+    "verification": "launchpad audit, 2026-11-11: Home defaults: home and first screen com.samsung.tv.csfs, startup and backup org.tizen.tv-viewer, empty overlay. One tvctx-manager runs as root, and the .NET 6.0.9 runtime is present. On 2026-11-11 the app was installed, launched, assigned to Home, restored, archived and assigned again; the owner confirmed YouTube, Stremio, Settings, Back and the physical Home button. Reboot and standby persistence are untested."
   }
 }

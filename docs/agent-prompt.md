@@ -1,6 +1,6 @@
 # Samsung TV privacy and durable voice shutdown
 
-Version 1.3, 2026-10-25. A reusable task prompt for GPT-6 Astra or a comparably capable tool-using model. Paste this whole document into a coding-agent session with local filesystem, terminal and web access. Fill in what you know; discover the rest. This is a workflow for recent Samsung TVs, not a claim that every model is rootable or supports the same controls.
+A reusable task prompt for a capable tool-using model. Paste this whole document into a coding-agent session with local filesystem, terminal and web access. Fill in what you know; discover the rest. This repository supports one Samsung Q65D build; use this method to validate a new firmware build before writing a new profile. It is not a claim that other models or builds are rootable or support the same controls.
 
 ## Task and inputs
 
@@ -25,19 +25,18 @@ scope:
 preserve:
   - Settings and normal remote navigation
   - HDMI inputs, HDMI-CEC, playback and audio output
-  - networking, DRM, manual updates and One Connect where present
-  - manual Art Mode where present
+  - networking, DRM and manual updates
   - Netflix, browser and shared web runtimes
 preferred_hdmi_input: unspecified
 ```
 
-Microphone shutdown takes priority over microphone-based automatic Art presence detection; explain any resulting loss. Preserve unrelated functionality. Custom launcher development, firmware flashing, downgrades and certificate changes are outside this default scope. An input requesting one of those requires a separate concrete compatibility and recovery plan. Do not turn an offline extraction into a purported installable update.
+Microphone shutdown takes priority over microphone-based presence detection; explain any resulting loss. Preserve unrelated functionality. Custom launcher development, firmware flashing, downgrades and certificate changes are outside this default scope. An input requesting one of those requires a separate concrete compatibility and recovery plan. Do not turn an offline extraction into a purported installable update.
 
 ## Setup
 
 1. Locate the existing repository and read its applicable instructions, current status and manifests. Keep existing work. Save all useful scripts and firmware blobs inside that repository; temporary directories may be staging, never the only copy of a deliverable.
 2. Identify the full model code, region, year/platform, installed firmware/build and relevant companion hardware from live settings or reliable device metadata. Ask for the model label only if discovery cannot resolve it. Do not assume that a similar retail model shares firmware, partitions or exploit compatibility.
-3. Put the computer and TV on a reachable trusted LAN. Discover the TV through existing device records, ARP, mDNS or SSDP, then verify identity. Determine the host interface/address that actually routes to it. Keep the TV fully awake for setup; Art Mode or standby may affect reachability. A closed port does not establish that the TV is absent or incompatible.
+3. Put the computer and TV on a reachable trusted LAN. Discover the TV through existing device records, ARP, mDNS or SSDP, then verify identity. Determine the host interface/address that actually routes to it. Keep the TV fully awake for setup; standby may affect reachability. A closed port does not establish that the TV is absent or incompatible.
 4. If developer access is needed, use the current Samsung instructions for that model. The documented flow is Smart Hub → Apps → App Settings → enter `12345`, enable Developer Mode, enter the computer's LAN IP and reboot. Menus vary; verify rather than repeating an inapplicable sequence. Guide me through physical actions you cannot perform. Developer Mode and SDB access do not themselves mean root access.
 5. Use official Samsung/Tizen tooling compatible with the host OS/architecture. Verify downloads and record tool versions. Check existing tools before installing duplicates. Establish the documented device connection and validate it with a harmless identity query; inspect current CLI help rather than inventing flags. Check LAN/callback reachability without disabling security controls globally.
 6. Locate the model-specific official firmware package. Download only what is needed, preserve the original bytes, record source URL, retrieval time, byte size and SHA-256, and distinguish downloadable firmware from the installed build. Never update the TV merely to match a convenient research image. Use bounded retries and resumable downloads where supported.
@@ -93,7 +92,7 @@ using its uv project and existing CLI. Use this layout:
 - `firmware/` (ignored): original downloads, extracted filesystems and retrieved vendor binaries.
 - `.local/` (ignored): external toolchain, reports, recovery evidence and prepared candidates.
 
-Keep scripts, profile, AGENTS.md and README synchronized. Keep the README concise and in the owner's direct, conversational voice, with confirmed findings and practical recommendations. Put commands, rollback details and verification evidence in AGENTS.md or local reports. Avoid repeating counts and test logs in the README.
+Keep scripts, profile, AGENTS.md, README and `docs/` synchronized. Keep the README to the initial setup. Put confirmed findings and recommendations in `docs/controls.md`, commands and rollback in `docs/commands.md`, and verification evidence in `docs/status.md` or local reports. Avoid repeating counts and test logs in the README.
 Explain results directly to the user; keep interim investigations in local reports.
 
 Keep firmware, retrieved vendor binaries, credentials and raw device logs local and out of public Git/Gists. Git-ignore blobs and private runtime data without deleting local copies. Retain provenance and hashes in shareable manifests with private identifiers redacted. Publish only content explicitly requested for sharing. Save dependency versions, commands and scripts used to generate every deliverable. Do not rely on ephemeral `/tmp` files or an agent's memory to reproduce it.
