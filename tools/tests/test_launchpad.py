@@ -1513,9 +1513,8 @@ class LaunchTargetTests(unittest.TestCase):
 
     def test_unpinned_or_malformed_profiles_are_refused(self):
         pins = self.policy["launchpad"]
-        s95c = json.loads(frame.PROFILES["s95c-2220"].read_text())
         for policy in (
-            s95c,
+            {k: v for k, v in self.policy.items() if k != "launchpad"},
             {"model": home.MODEL, "build": Q65D_BUILD},
             self.policy | {"launchpad": pins | {"extra": True}},
             self.policy

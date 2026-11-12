@@ -1,4 +1,4 @@
-"""Ensure another TV cannot inherit Frame controls without live validation."""
+"""Ensure the Q65D profile pins every control before it reaches the TV."""
 
 import hashlib
 import subprocess
@@ -186,8 +186,8 @@ sha256sum() {
                     )
                     self.assertEqual(marker.exists(), case == "valid")
 
-    def test_s95c_trial_is_isolated_and_batch_requires_restoration_evidence(self):
-        with patch.object(frame, "ACTIVE_PROFILE", "s95c-2220"):
+    def test_trial_is_isolated_and_batch_requires_restoration_evidence(self):
+        with patch.object(frame, "ACTIVE_PROFILE", "q65d-2123"):
             policy = frame.policy()
             trial = frame.render_trial()
             batch = frame.render_apps("apply")
@@ -208,11 +208,12 @@ sha256sum() {
                 self.assertIn(
                     policy["validation_trial"]["journal"] + "/verified", script
                 )
-            self.assertNotIn("virtual-mic-service.service", runtime)
-            self.assertNotIn("com.samsung.tv.voiceid-service", batch)
+            # This build has no wake-word-less or far-field voice units.
+            self.assertNotIn("wakeupless", runtime)
+            self.assertNotIn("farfieldvoice.service", runtime)
 
-    def test_s95c_rejects_unvalidated_runtime_scopes(self):
-        with patch.object(frame, "ACTIVE_PROFILE", "s95c-2220"):
+    def test_rejects_unvalidated_runtime_scopes(self):
+        with patch.object(frame, "ACTIVE_PROFILE", "q65d-2123"):
             for scope in ("certificates", "services", "both"):
                 with self.subTest(scope=scope), self.assertRaises(ValueError):
                     frame.render("apply", scope)
@@ -246,7 +247,7 @@ sha256sum() {
         import io
         import tarfile
 
-        for profile in ("s95c-2220", "q65d-2123"):
+        for profile in ("q65d-2123",):
             with (
                 self.subTest(profile=profile),
                 patch.object(frame, "ACTIVE_PROFILE", profile),
@@ -262,29 +263,29 @@ sha256sum() {
                 ):
                     frame.main()
 
-    def test_s95c_boot_package_contains_only_assessed_scopes(self):
+    def test_boot_package_contains_only_assessed_scopes(self):
         import io
         import tarfile
 
-        with patch.object(frame, "ACTIVE_PROFILE", "s95c-2220"):
+        with patch.object(frame, "ACTIVE_PROFILE", "q65d-2123"):
+            groups = [
+                name
+                for name, entry in frame.policy()["optional_controls"].items()
+                if entry["systemd_units"]
+            ]
             package = startup.bundle(frame.policy(), frame.render, frame.ASSETS)
             with tarfile.open(fileobj=io.BytesIO(package)) as archive:
                 candidates = archive.extractfile("candidates").read().decode()
                 script = archive.extractfile("wifi-presence.apply").read().decode()
-            self.assertEqual(len(candidates.splitlines()), 3)
+            self.assertEqual(len(candidates.splitlines()), 1 + len(groups))
             self.assertIn("voice\t/run/frame-runtime-v1\tvoice", candidates)
-            self.assertIn(
-                "wifi-presence\t/run/frame-services-wifi-presence-v1", candidates
-            )
-            self.assertIn(
-                "shell-preload\t/run/frame-services-shell-preload-v1", candidates
-            )
+            for group in groups:
+                self.assertIn(
+                    f"{group}\t/run/frame-services-{group}-v1\tservices", candidates
+                )
+            self.assertNotIn("smarthub-ads", candidates)
             self.assertNotIn("certificates", candidates)
             decoded = frame.base64.b64decode(script.split()[2]).decode()
-            self.assertIn(
-                "03caae12e4fe516057da6d919d7e987953c991c5ad5add19e2a73697652bcd34",
-                decoded,
-            )
             self.assertIn("STATE=/run/frame-services-wifi-presence-v1", decoded)
             subprocess.run(["/bin/bash", "-n"], input=decoded, text=True, check=True)
 
@@ -304,10 +305,10 @@ sha256sum() {
                 text=True,
             )
 
-        accepted = run("s95c-2220", "shell-preload")
+        accepted = run("q65d-2123", "reporting")
         self.assertNotIn("invalid choice", accepted.stderr)
         self.assertIn("--tv is required", accepted.stderr)
-        self.assertIn("invalid choice", run("frame", "shell-preload").stderr)
+        self.assertIn("invalid choice", run("q65d-2123", "shell-preload").stderr)
 
     def test_app_groups_come_from_the_selected_profile(self):
         def run(profile, group):
@@ -326,46 +327,46 @@ sha256sum() {
                 text=True,
             )
 
-        accepted = run("s95c-2220", "art")
+        accepted = run("q65d-2123", "gaming-backend")
         self.assertIn("--tv is required", accepted.stderr)
-        self.assertIn("invalid choice", run("s95c-2220", "gaming").stderr)
-        self.assertIn("invalid choice", run("frame", "art").stderr)
+        self.assertIn("invalid choice", run("q65d-2123", "gaming").stderr)
+        self.assertIn("invalid choice", run("q65d-2123", "art").stderr)
 
-    def test_s95c_shell_preload_pins_unit_preimages(self):
-        with patch.object(frame, "ACTIVE_PROFILE", "s95c-2220"):
-            units = frame.policy()["optional_controls"]["shell-preload"][
+    def test_service_group_pins_unit_preimages(self):
+        with patch.object(frame, "ACTIVE_PROFILE", "q65d-2123"):
+            units = frame.policy()["optional_controls"]["wifi-presence"][
                 "systemd_units"
             ]
             decoded = frame.base64.b64decode(
-                frame.render("apply", "services", unit_group="shell-preload").split()[2]
+                frame.render("apply", "services", unit_group="wifi-presence").split()[2]
             ).decode()
             for unit in units:
                 self.assertIn(
                     frame.policy()["preimages"]["/usr/lib/systemd/system/" + unit],
                     decoded,
                 )
-            self.assertIn("STATE=/run/frame-services-shell-preload-v1", decoded)
+            self.assertIn("STATE=/run/frame-services-wifi-presence-v1", decoded)
             self.assertNotIn("org.tizen.menu.service", decoded)
             subprocess.run(["/bin/bash", "-n"], input=decoded, text=True, check=True)
 
-    def test_s95c_art_group_pins_app_preimages_and_spares_ambient_mode(self):
-        with patch.object(frame, "ACTIVE_PROFILE", "s95c-2220"):
+    def test_app_group_pins_app_and_runtime_preimages(self):
+        with patch.object(frame, "ACTIVE_PROFILE", "q65d-2123"):
             policy = frame.policy()
-            apps = policy["optional_controls"]["art"]["application_ids"]
-            self.assertEqual(apps, ["org.tizen.art-app", "com.samsung.tv.home.art"])
-            script = frame.render_apps("apply", group="art")
+            apps = policy["optional_controls"]["gaming-backend"]["application_ids"]
+            self.assertEqual(
+                apps, ["com.samsung.tv.ghdaemon", "com.samsung.tv.ghservice"]
+            )
+            script = frame.render_apps("apply", group="gaming-backend")
             for app in apps:
                 entry = policy["applications"][app]
                 for path in (entry["executable"], entry["manifest"]):
                     self.assertIn(policy["preimages"][path] + "  " + path, script)
-            self.assertIn("/opt/usr/home/owner/share/frame-apps-art-v1", script)
-            self.assertIn(policy["validation_trial"]["journal"] + "/verified", script)
-            self.assertNotIn("ambient-support", script)
             self.assertIn(
-                policy["preimages"]["/usr/bin/dotnet-launcher-inhouse"]
-                + "  /usr/bin/dotnet-launcher-inhouse",
-                script,
+                "/opt/usr/home/owner/share/frame-apps-gaming-backend-v1", script
             )
+            self.assertIn(policy["validation_trial"]["journal"] + "/verified", script)
+            for runtime in policy["managed_runtimes"]:
+                self.assertIn(policy["preimages"][runtime] + "  " + runtime, script)
             subprocess.run(["/bin/bash", "-n"], input=script, text=True, check=True)
 
 

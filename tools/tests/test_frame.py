@@ -111,7 +111,6 @@ class HostTests(unittest.TestCase):
             self.assertEqual(frame.main(), 0)
         run.assert_called_once()
         for profile, action in (
-            ("s95c-2220", ["launchpad", "status"]),
             ("q65d-2123", ["home", "inspect"]),
             ("q65d-2123", ["quiet-hours", "status"]),
         ):
