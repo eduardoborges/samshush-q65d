@@ -4,12 +4,15 @@ import argparse
 import asyncio
 import base64
 import datetime
+import gzip
 import hashlib
+import http.client
 import json
 import math
 import os
 import re
 import secrets
+import shlex
 import subprocess
 import tempfile
 import urllib.error
@@ -96,12 +99,9 @@ def layout_directory(name):
 
 
 def launch_target(policy, assets):
-    """The Frame uses the upstream constants. Other TVs need explicit profile pins."""
+    """The profile pins the routing libraries, helper and layout for its build."""
     import launchpad_routing
-    from home import BUILD, MODEL
 
-    if policy.get("model") == MODEL and policy.get("build") == BUILD:
-        return Target(MODEL, BUILD, launchpad_routing.HASHES, assets / "payloads", None)
     pins = policy.get("launchpad")
     if not isinstance(pins, dict) or set(pins) != {
         "layout",
@@ -129,6 +129,45 @@ def launch_target(policy, assets):
         assets / helper,
         layout_directory(pins["layout"]),
     )
+
+
+def marker(output, name):
+    values = [
+        line.removeprefix(name + " ")
+        for line in output.splitlines()
+        if line.startswith(name + " ")
+    ]
+    if len(values) != 1:
+        raise ValueError(f"Missing or ambiguous TV evidence: {name}")
+    return values[0]
+
+
+def verify_model(tv, model):
+    connection = http.client.HTTPConnection(str(tv), 8001, timeout=5)
+    try:
+        connection.request("GET", "/api/v2/", headers={"Cache-Control": "no-cache"})
+        response = connection.getresponse()
+        data = response.read(65537)
+        if response.status != 200 or len(data) > 65536:
+            raise ValueError("Cannot verify TV model")
+        identity = json.loads(data)
+        if (
+            not isinstance(identity, dict)
+            or not isinstance(identity.get("device"), dict)
+            or identity["device"].get("modelName") != model
+        ):
+            raise ValueError(f"Expected Samsung TV model {model}")
+    finally:
+        connection.close()
+
+
+def device_command(script):
+    encoded = base64.b64encode(gzip.compress(script.encode(), mtime=0)).decode()
+    pipeline = f"printf %s {encoded} | base64 -d | gzip -dc | nsenter --mount=/proc/1/ns/mnt /bin/bash"
+    command = "/bin/bash -o pipefail -c " + shlex.quote(pipeline)
+    if len(command.encode()) > 65536:
+        raise ValueError("TV command exceeds the transport command bound")
+    return command
 
 
 def parse_xml(data):
@@ -578,7 +617,6 @@ def run(args, frame):
     from samsung_tv_root.archive_root import probe
     from samsung_tv_root.sdb import SdbClient, find_sdb
 
-    import home_layout
     import launchpad_routing
 
     target = launch_target(frame.policy(), frame.ASSETS)
@@ -662,7 +700,7 @@ def run(args, frame):
                 callback_host=str(args.callback_host) if args.callback_host else None,
                 accept_timeout=180,
                 command_timeout=90,
-                commands=(home_layout.device_command(script),),
+                commands=(device_command(script),),
                 payloads=frame.ASSETS / "payloads",
             )
         )
@@ -714,7 +752,7 @@ def run(args, frame):
         if output.splitlines().count("LAUNCHPAD_RESOURCES_VERIFIED") != 1:
             raise ValueError("Missing launcher resource verification")
         if resources is None:
-            encoded = home_layout.marker(output, "LAUNCHPAD_WEATHER_CONFIG")
+            encoded = marker(output, "LAUNCHPAD_WEATHER_CONFIG")
             weather_config(base64.b64decode(encoded, validate=True))
 
     def checked_upload(script, marker):
@@ -750,7 +788,7 @@ def run(args, frame):
 
     save()
     try:
-        home_layout.verify_model(args.tv, target.model)
+        verify_model(args.tv, target.model)
         before = routing(
             "query"
             if args.operation in {"inspect", "install", "launch", "restore"}
@@ -764,8 +802,8 @@ def run(args, frame):
             else:
                 output = execute(registration_script(identity, target))
                 if (
-                    home_layout.marker(output, "LAUNCHPAD_PACKAGE_COUNT") != "0"
-                    or home_layout.marker(output, "LAUNCHPAD_APP_COUNT") != "0"
+                    marker(output, "LAUNCHPAD_PACKAGE_COUNT") != "0"
+                    or marker(output, "LAUNCHPAD_APP_COUNT") != "0"
                 ):
                     raise ValueError(
                         "Launcher is already registered; inspect it before replacing the package"
@@ -852,9 +890,9 @@ echo LAUNCHPAD_UPLOAD_CLEANED
                     "Only a restored or rolled-back Home journal can be archived"
                 )
             output = execute(launchpad_routing.journal_script(target.build))
-            digest = home_layout.marker(output, "LAUNCHPAD_JOURNAL_SHA256")
+            digest = marker(output, "LAUNCHPAD_JOURNAL_SHA256")
             raw = base64.b64decode(
-                home_layout.marker(output, "LAUNCHPAD_JOURNAL_RAW"), validate=True
+                marker(output, "LAUNCHPAD_JOURNAL_RAW"), validate=True
             )
             if (
                 hashlib.sha256(raw).hexdigest() != digest
@@ -872,7 +910,7 @@ echo LAUNCHPAD_UPLOAD_CLEANED
                     target.build, digest=digest, stamp=stamp
                 )
             )
-            evidence["archived_journal"]["path"] = home_layout.marker(
+            evidence["archived_journal"]["path"] = marker(
                 output, "LAUNCHPAD_JOURNAL_ARCHIVED"
             )
             evidence["after"] = routing("query")

@@ -10,6 +10,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import launchpad_routing as routing
 
+# Any build other than the Q65D one compiled into the checked-in helper.
+OTHER_BUILD = "T-OTHERBLD-0090-REL-202601010000"
+
 
 def original():
     return {
@@ -121,7 +124,7 @@ class RoutingEvidenceTests(unittest.TestCase):
                 routing.render_script("query", artifacts | {".dll": value})
 
     def test_other_builds_get_their_own_helper_source_and_pins(self):
-        build = "T-NKLDUABC-0090-REL-202603190159"
+        build = OTHER_BUILD
         source = routing.source_for(build)
         self.assertEqual(routing.source_for(routing.BUILD), routing.SOURCE)
         self.assertEqual(source.count(build), 1)
@@ -146,6 +149,12 @@ class RoutingEvidenceTests(unittest.TestCase):
         for path in routing.HASHES:
             self.assertIn(f"{'a' * 64}  {path}", script)
 
+    def test_defaults_match_the_q65d_profile_pins(self):
+        profile = Path(__file__).resolve().parents[1] / "profiles/q65d-2123.json"
+        policy = json.loads(profile.read_text())
+        self.assertEqual(routing.BUILD, policy["build"])
+        self.assertEqual(routing.HASHES, policy["launchpad"]["routing_hashes"])
+
     def test_library_pins_must_cover_the_imported_libraries_with_digests(self):
         artifacts = {".dll": b"dll", ".runtimeconfig.json": b"{}"}
         complete = {path: "b" * 64 for path in routing.HASHES}
@@ -163,7 +172,7 @@ class RoutingEvidenceTests(unittest.TestCase):
             routing.render_script("query", artifacts, build="T-X'; reboot; '")
 
     def test_receipt_must_match_the_selected_build(self):
-        build = "T-NKLDUABC-0090-REL-202603190159"
+        build = OTHER_BUILD
         value = evidence()
         with self.assertRaises(ValueError):
             routing.parse_output(output(value), build=build)
@@ -175,7 +184,7 @@ class RoutingEvidenceTests(unittest.TestCase):
             routing.parse_output(output(value))
 
     def test_audit_is_read_only_and_checks_the_profile_build(self):
-        build = "T-NKLDUABC-0090-REL-202603190159"
+        build = OTHER_BUILD
         script = routing.render_audit(build, "Gxqk7W2na5")
         self.assertIn(f"BUILD_ID={build}", script)
         self.assertIn("a.app_nodisplay", script)
@@ -262,7 +271,7 @@ internal static class RoutingTests {
         throw new Exception("Expected failure");
     }
     static R.Receipt Receipt(string phase="prepared") => new R.Receipt(1,
-        "T-RSMFAKUC-0090-REL-202607141953", "ABCDEFGHIJ", App, phase, Original());
+        "T-NKLDUABC-0090-REL-202603190159", "ABCDEFGHIJ", App, phase, Original());
     static void Transaction(string scenario) {
         var original = Original(); var target = R.Target(original, App); var state = Clone(original);
         var phases = new List<string>(); int operations = 0, homes = 0; bool fail = true;

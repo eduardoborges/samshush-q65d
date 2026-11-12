@@ -5,8 +5,6 @@ import io
 import tarfile
 import time
 
-import remove_packages
-
 ROOT = "/opt/usr/share/samshush-boot-v1"
 HOOK = "/opt/etc/parseinfo.sh"
 ORIGINAL_HASH = "c6369e7dec69408e176daa252d436acf6f8e265f560504d8bd831c8023c71d61"
@@ -108,11 +106,6 @@ while IFS=$'\t' read -r name journal scope; do
     cat "$ROOT/$name.status" | /bin/bash
     phase "$name.end"
 done < "$ROOT/enabled"
-if [[ -e /opt/usr/share/samshush-removals-v1 ]]; then
-    phase packages.begin
-    cat "$ROOT/packages.status" | nsenter --mount=/proc/1/ns/mnt /bin/bash
-    phase packages.end
-fi
 echo 'STARTUP COMPLETE'
 """
 
@@ -182,9 +175,6 @@ if [[ $ACTION == run ]]; then
 fi
 mkdir -m 700 "$LOCK" || fail 'Startup operation already running or interrupted'
 operation_locked=1
-if [[ -e /opt/usr/share/samshush-quiet-hours-v1 || -L /opt/usr/share/samshush-quiet-hours-v1 ]]; then
-    fail 'Remove Art quiet hours before changing the shared boot handoff'
-fi
 if [[ $ACTION == remove ]]; then
     [[ -d $ROOT && ! -L $ROOT ]] || fail 'No startup installation to remove'
     [[ $(stat -c '%u:%a' "$ROOT") == 0:700 ]] || fail 'Unsafe startup directory'
@@ -225,9 +215,6 @@ while IFS=$'\t' read -r name journal scope; do
     printf '%s\t%s\t%s\n' "$name" "$journal" "$scope" >> "$TEMP/enabled"
 done < "$TEMP/candidates"
 [[ -s $TEMP/enabled ]] || fail 'No completed runtime controls to reapply'
-if [[ -e /opt/usr/share/samshush-removals-v1 ]]; then
-    cat "$TEMP/packages.status" | nsenter --mount=/proc/1/ns/mnt /bin/bash
-fi
 # Add the selected policy to the integrity manifest before the atomic directory move.
 (cd "$TEMP" && sha256sum enabled >> SHA256SUMS)
 chown -R 0:0 "$TEMP"
@@ -263,56 +250,35 @@ def substitute(text, build, **values):
     return text
 
 
-def bundle(policy, render, assets):
+def bundle(policy, render):
     files = {
         "wrapper": WRAPPER.encode(),
         "launch": substitute(LAUNCH, policy["build"]).encode(),
         "worker": substitute(COMMON + WORKER, policy["build"]).encode(),
     }
     candidates = [("voice", "/run/frame-runtime-v1", "voice", {})]
-    if policy["certificates"]:
-        candidates.append(
-            (
-                "certificates",
-                "/run/frame-certificates-v1",
-                "certificates",
-                {"certificate_journal": True},
-            )
-        )
     candidates += [
         (name, f"/run/frame-services-{name}-v1", "services", {"unit_group": name})
         for name, entry in policy["optional_controls"].items()
         if entry["systemd_units"]
     ]
-    # The visual manager can request an absent model as soon as the network
-    # connects. Stop that installer and background delivery before the larger
-    # voice batch. This shortens the boot window; it is not a persistent mask.
-    priority = {"visual-analysis": 0, "optional-delivery": 1}
-    candidates.sort(key=lambda candidate: priority.get(candidate[0], 2))
+    # Background delivery can install packages as soon as the network connects,
+    # so stop it before the larger voice batch. This shortens the boot window;
+    # it is not a persistent mask.
+    candidates.sort(key=lambda candidate: candidate[0] != "optional-delivery")
     for name, _, scope, options in candidates:
         for action in ("apply", "status"):
             files[f"{name}.{action}"] = (
                 render(action, scope, **options) + "\n"
             ).encode()
-        if scope == "certificates":
-            expected = [
-                "\t".join((c["path"], c["before"], c["after"], c["file"]))
-                for c in policy["certificates"]
-            ]
-        elif name == "voice":
+        if name == "voice":
             expected = policy["voice_privacy"]["systemd_units"]
         else:
             expected = policy["optional_controls"][name]["systemd_units"]
         files[f"{name}.expected"] = ("\n".join(expected) + "\n").encode()
-    if all(group in policy["optional_controls"] for group in remove_packages.GROUPS):
-        files["packages.status"] = remove_packages.render("status", policy).encode()
     files["candidates"] = "".join(
         f"{name}\t{journal}\t{scope}\n" for name, journal, scope, _ in candidates
     ).encode()
-    for cert in policy["certificates"]:
-        files["certificates/" + cert["file"]] = (
-            assets / "certificates" / cert["file"]
-        ).read_bytes()
     files["SHA256SUMS"] = "".join(
         f"{hashlib.sha256(data).hexdigest()}  {name}\n" for name, data in files.items()
     ).encode()

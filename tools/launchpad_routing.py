@@ -9,7 +9,8 @@ import shlex
 import subprocess
 from pathlib import Path
 
-from home import BUILD
+# The Q65D build compiled into the checked-in helper; source_for() swaps it for another build.
+BUILD = "T-NKLDUABC-0090-REL-202603190159"
 
 JOURNAL = "/opt/usr/share/samshush-home-v1"
 BUILD_PATTERN = r"T-[A-Z0-9]+-[0-9]{4}-REL-[0-9]{12}"
@@ -34,11 +35,11 @@ PHASES = {
     "recovery-needed",
 }
 HASHES = {
-    "/usr/lib/libaul.so.0": "7fa8b885ddad2eaf87c66b3876b6462fc5e036236d0a4a9e763e7fce0b33b6de",
-    "/usr/lib/libbundle.so.0": "71cac283580aa7c3a79f6e88502cf802b500b93ce779df51964cd1a3e781cf58",
-    "/usr/lib/libvconf.so.0": "007a02e106ee38d0319084c458f048c556dcf618112cc1114e3e47cb8d226619",
-    "/usr/lib/libcapi-appfw-app-operation-tv.so.0.1.0": "02d6769b4906202e2edc34c5329057a329fe7bd55738183b450dcb9a2d518e50",
-    "/usr/lib/libcapi-appfw-app-control.so.0.23.0": "1b31a4c6a1d167e6483f296f1b47e6c8131440aab81b278d24acf064f6edfc83",
+    "/usr/lib/libaul.so.0": "483b96db6d3c52563d9dedfd466cfd6fe9a27ad0b6e15e615de923ffe83e83f1",
+    "/usr/lib/libbundle.so.0": "22d6538034ddce6b9810bc1fbd1311b21d00767c7674f3026fc18fcf1d3e865c",
+    "/usr/lib/libvconf.so.0": "5b91888c7e91102c7ac59c648541d7d6827d550fa3d0fe226c9e135af39e95eb",
+    "/usr/lib/libcapi-appfw-app-operation-tv.so.0.1.0": "ff9e230125ccb797f6437631f2b79144d3d40980efe1dcc8a12bfaf2ca8e97f7",
+    "/usr/lib/libcapi-appfw-app-control.so.0.23.0": "9289ee834e618079643be73df93365c8d3572b50b3b85c3c77d3dbebf915612e",
 }
 PROJECT = """<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup>
 <OutputType>Exe</OutputType><TargetFramework>net6.0</TargetFramework>
@@ -441,7 +442,7 @@ using System.Threading;
 
 internal static class LaunchpadRouting
 {
-    const string Build = "T-RSMFAKUC-0090-REL-202607141953";
+    const string Build = "T-NKLDUABC-0090-REL-202603190159";
     const string Root = "/opt/usr/share/samshush-home-v1";
     const string MainOperation = "http://tizen.org/appcontrol/operation/main";
     const string HomeKey = "db/appfw/home_appid";

@@ -78,7 +78,6 @@
     "com.samsung.tv.passthru-service.path",
     "com.samsung.tv.passthru-service.service"
   ],
-  "certificates": [],
   "optional_controls": {
     "wifi-presence": {
       "application_ids": [],

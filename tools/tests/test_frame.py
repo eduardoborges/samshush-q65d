@@ -18,30 +18,6 @@ spec.loader.exec_module(frame)
 
 
 class HostTests(unittest.TestCase):
-    def test_quiet_hours_reject_invalid_or_ambiguous_times_before_tv_access(self):
-        for arguments in (
-            ["set"],
-            ["set", "--start", "22:00"],
-            ["set", "--start", "22:00", "--end", "22:00"],
-            ["set", "--start", "22:00", "--end", "24:00"],
-            ["set", "--start", "06:60", "--end", "07:00"],
-            ["remove", "--end", "07:00"],
-            ["status", "--spotlight-art"],
-            ["inspect", "--no-spotlight-art"],
-        ):
-            with (
-                self.subTest(arguments=arguments),
-                patch.object(
-                    frame.sys, "argv", ["frame.py", "quiet-hours", *arguments]
-                ),
-                patch.object(frame, "verify_files") as verify,
-                patch("sys.stderr", new_callable=io.StringIO),
-                self.assertRaises(SystemExit) as raised,
-            ):
-                frame.main()
-            self.assertEqual(raised.exception.code, 2)
-            verify.assert_not_called()
-
     def test_launchpad_widget_and_previous_widget_require_their_operations(self):
         for arguments in (
             ["launchpad", "install"],
@@ -95,128 +71,42 @@ class HostTests(unittest.TestCase):
             self.assertEqual(run.call_args.args[0].operation, operation)
 
     def test_launchpad_runs_only_on_profiles_that_pin_it(self):
-        base = ["frame.py", "--tv", "192.0.2.1"]
+        base = ["frame.py", "--tv", "192.0.2.1", "launchpad", "status"]
         with (
-            patch.object(
-                frame.sys,
-                "argv",
-                base[:1]
-                + ["--profile", "q65d-2123"]
-                + base[1:]
-                + ["launchpad", "status"],
-            ),
+            patch.object(frame.sys, "argv", base),
             patch.object(frame, "verify_files"),
             patch("launchpad.run", return_value=0) as run,
         ):
             self.assertEqual(frame.main(), 0)
         run.assert_called_once()
-        for profile, action in (
-            ("q65d-2123", ["home", "inspect"]),
-            ("q65d-2123", ["quiet-hours", "status"]),
-        ):
-            with (
-                self.subTest(profile=profile, action=action),
-                patch.object(
-                    frame.sys,
-                    "argv",
-                    base[:1] + ["--profile", profile] + base[1:] + action,
-                ),
-                patch.object(frame, "verify_files") as verify,
-                patch("launchpad.run") as run,
-                patch("sys.stderr", new_callable=io.StringIO),
-                self.assertRaises(SystemExit) as raised,
-            ):
-                frame.main()
-            self.assertEqual(raised.exception.code, 2)
-            verify.assert_not_called()
-            run.assert_not_called()
-
-    def test_returned_package_preparation_dispatches_with_private_backup(self):
+        unpinned = {k: v for k, v in frame.policy().items() if k != "launchpad"}
         with (
-            patch.object(
-                frame.sys,
-                "argv",
-                [
-                    "frame.py",
-                    "--tv",
-                    "192.0.2.1",
-                    "packages",
-                    "prepare-returned",
-                    "--backup-dir",
-                    ".local/backups/returned",
-                ],
-            ),
-            patch.object(frame, "verify_files"),
-            patch("remove_packages.run", return_value=0) as run,
-        ):
-            self.assertEqual(frame.main(), 0)
-        args = run.call_args.args[0]
-        self.assertEqual(args.operation, "prepare-returned")
-        self.assertEqual(args.backup_dir, Path(".local/backups/returned"))
-
-    def test_home_install_requires_explicit_scope_before_transport(self):
-        with (
-            patch.object(
-                frame.sys,
-                "argv",
-                ["frame.py", "--tv", "192.0.2.1", "home", "install"],
-            ),
+            patch.object(frame.sys, "argv", base),
+            patch.object(frame, "policy", return_value=unpinned),
             patch.object(frame, "verify_files") as verify,
-            patch("sys.stderr", new_callable=io.StringIO) as error,
-            self.assertRaises(SystemExit) as raised,
-        ):
-            frame.main()
-        self.assertEqual(raised.exception.code, 2)
-        self.assertIn("--apple-tv-only", error.getvalue())
-        verify.assert_not_called()
-
-    def test_home_scopes_are_mutually_exclusive(self):
-        with (
-            patch.object(
-                frame.sys,
-                "argv",
-                ["frame.py", "home", "install", "--startup-only", "--apple-tv-only"],
-            ),
-            patch.object(frame, "verify_files") as verify,
+            patch("launchpad.run") as run,
             patch("sys.stderr", new_callable=io.StringIO),
             self.assertRaises(SystemExit) as raised,
         ):
             frame.main()
         self.assertEqual(raised.exception.code, 2)
         verify.assert_not_called()
+        run.assert_not_called()
 
-    def test_home_layout_dispatch_is_separate_from_startup_preferences(self):
-        for operation in ("inspect", "install", "status", "remove"):
+    def test_unvalidated_commands_and_scopes_stop_before_tv_access(self):
+        for action in (
+            ["home", "inspect"],
+            ["quiet-hours", "status"],
+            ["packages", "status"],
+            ["certificates", "status"],
+            ["auto-update", "status"],
+            ["apply", "--scope", "services"],
+            ["apply", "--scope", "certificates"],
+        ):
             with (
-                self.subTest(operation=operation),
+                self.subTest(action=action),
                 patch.object(
-                    frame.sys,
-                    "argv",
-                    [
-                        "frame.py",
-                        "--tv",
-                        "192.0.2.1",
-                        "home",
-                        operation,
-                        "--apple-tv-only",
-                    ],
-                ),
-                patch.object(frame, "verify_files"),
-                patch("home_layout.run", return_value=0) as run,
-                patch.object(frame.home, "render") as startup,
-            ):
-                self.assertEqual(frame.main(), 0)
-            self.assertEqual(run.call_args.args[0].operation, operation)
-            startup.assert_not_called()
-
-    def test_home_startup_only_flag_cannot_be_used_for_other_operations(self):
-        for operation in ("inspect", "status", "remove"):
-            with (
-                self.subTest(operation=operation),
-                patch.object(
-                    frame.sys,
-                    "argv",
-                    ["frame.py", "home", operation, "--startup-only"],
+                    frame.sys, "argv", ["frame.py", "--tv", "192.0.2.1", *action]
                 ),
                 patch.object(frame, "verify_files") as verify,
                 patch("sys.stderr", new_callable=io.StringIO),
@@ -226,28 +116,15 @@ class HostTests(unittest.TestCase):
             self.assertEqual(raised.exception.code, 2)
             verify.assert_not_called()
 
-    def test_voice_scope_excludes_certificates_and_unrelated_units(self):
-        policy = {
-            "build": "test",
-            "certificates": [],
-            "units": ["ads.service", "voice.path", "voice.service"],
-            "voice_privacy": {"systemd_units": ["voice.path", "voice.service"]},
-        }
-        with patch.object(frame, "policy", return_value=policy):
-            encoded = frame.render("apply", "voice").split()[2]
-            script = frame.base64.b64decode(encoded).decode()
-            self.assertIn("voice.path\nvoice.service", script)
-            self.assertNotIn("ads.service", script)
-            self.assertIn("SCOPE='voice'", script)
-
-    def test_certificate_commands_isolate_recovery_but_share_operation_lock(self):
-        for action in ("apply", "status", "restore"):
-            payload = frame.render(action, "certificates", certificate_journal=True)
-            script = frame.base64.b64decode(payload.split()[2]).decode()
-            subprocess.run(["/bin/bash", "-n"], input=script, text=True, check=True)
-            self.assertIn("STATE=/run/frame-certificates-v1", script)
-            self.assertIn("LOCK=/run/frame-runtime-v1.lock", script)
-            self.assertNotIn("STATE=/run/frame-runtime-v1", script)
+    def test_voice_scope_excludes_unrelated_units(self):
+        policy = frame.policy()
+        encoded = frame.render("apply", "voice").split()[2]
+        script = frame.base64.b64decode(encoded).decode()
+        self.assertIn("\n".join(policy["voice_privacy"]["systemd_units"]), script)
+        for entry in policy["optional_controls"].values():
+            for unit in entry["systemd_units"]:
+                self.assertNotIn(unit, script)
+        self.assertIn("SCOPE='voice'", script)
 
     def test_optional_groups_have_independent_state_and_valid_shell(self):
         for group, entries in frame.policy()["optional_controls"].items():
@@ -277,7 +154,7 @@ class HostTests(unittest.TestCase):
         script = frame.render_service_audit()
         subprocess.run(["/bin/bash", "-n"], input=script, text=True, check=True)
         self.assertNotIn("@@", script)
-        self.assertIn("screen-analysis-service-manager.service", script)
+        self.assertIn("data-service.service", script)
         self.assertIn("com.samsung.tv.wifi-motion-mgr.service", script)
         self.assertIn("/usr/bin/dotnet-launcher-inhouse", script)
         result = subprocess.run(
@@ -300,7 +177,11 @@ class HostTests(unittest.TestCase):
         self.assertEqual(result.stdout, 'spaces $HOME `false` ; "quotes"')
 
     def test_global_transport_executes_decoded_script(self):
-        policy = {"build": "test", "certificates": [], "units": []}
+        policy = {
+            "build": "test",
+            "units": [],
+            "device_identity": {"architecture": "armv7l"},
+        }
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             payload = "printf '%s' 'literal $HOME ; payload'\n"
@@ -313,13 +194,13 @@ class HostTests(unittest.TestCase):
                 patch.object(frame.device_scripts, "RUNTIME", payload),
                 patch.object(frame, "policy", return_value=policy),
             ):
-                for action in ("apply", "status", "restore"):
+                for action in ("status", "restore"):
                     with self.subTest(action=action):
                         result = subprocess.run(
                             [
                                 "/bin/bash",
                                 "-c",
-                                frame.wrapped(frame.render(action, "both")),
+                                frame.wrapped(frame.render(action, "none")),
                             ],
                             env=os.environ
                             | {"PATH": str(root) + ":" + os.environ["PATH"]},
@@ -512,21 +393,24 @@ class HostTests(unittest.TestCase):
             self.assertEqual(frame.main(), 1)
 
     def test_global_operations_enter_namespace_and_inspection_does_not(self):
-        p = {"build": "test", "certificates": [], "units": []}
-        with patch.object(frame, "policy", return_value=p):
-            self.assertTrue(
-                frame.render("apply", "both").endswith(
-                    "nsenter --mount=/proc/1/ns/mnt /bin/bash"
-                )
+        self.assertTrue(
+            frame.render("apply", "voice").endswith(
+                "nsenter --mount=/proc/1/ns/mnt /bin/bash"
             )
-            self.assertTrue(frame.render("inspect", "none").startswith("# Generated"))
-            for action in ("inspect", "status", "apply", "restore"):
-                subprocess.run(
-                    ["/bin/bash", "-n"],
-                    input=frame.render(action, "both"),
-                    text=True,
-                    check=True,
-                )
+        )
+        self.assertTrue(frame.render("inspect", "none").startswith("# Generated"))
+        for action, scope in (
+            ("inspect", "none"),
+            ("status", "none"),
+            ("apply", "voice"),
+            ("restore", "none"),
+        ):
+            subprocess.run(
+                ["/bin/bash", "-n"],
+                input=frame.render(action, scope),
+                text=True,
+                check=True,
+            )
 
 
 if __name__ == "__main__":

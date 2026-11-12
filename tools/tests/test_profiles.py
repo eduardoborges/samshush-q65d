@@ -243,7 +243,7 @@ sha256sum() {
             )
             subprocess.run(["/bin/bash", "-n"], input=decoded, text=True, check=True)
 
-    def test_other_profiles_omit_package_removal(self):
+    def test_boot_package_and_cli_omit_package_removal(self):
         import io
         import tarfile
 
@@ -252,7 +252,7 @@ sha256sum() {
                 self.subTest(profile=profile),
                 patch.object(frame, "ACTIVE_PROFILE", profile),
             ):
-                package = startup.bundle(frame.policy(), frame.render, frame.ASSETS)
+                package = startup.bundle(frame.policy(), frame.render)
                 with tarfile.open(fileobj=io.BytesIO(package)) as archive:
                     self.assertNotIn("packages.status", archive.getnames())
                 argv = ["frame.py", "--profile", profile, "--tv", "192.0.2.10"]
@@ -273,7 +273,7 @@ sha256sum() {
                 for name, entry in frame.policy()["optional_controls"].items()
                 if entry["systemd_units"]
             ]
-            package = startup.bundle(frame.policy(), frame.render, frame.ASSETS)
+            package = startup.bundle(frame.policy(), frame.render)
             with tarfile.open(fileobj=io.BytesIO(package)) as archive:
                 candidates = archive.extractfile("candidates").read().decode()
                 script = archive.extractfile("wifi-presence.apply").read().decode()

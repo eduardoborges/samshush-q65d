@@ -10,7 +10,6 @@ import subprocess
 from pathlib import Path
 
 import launchpad_routing
-import quiet_hours_worker
 from payload_sources import SOURCES
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,24 +40,11 @@ def main():
         parser.error(f"Expected SDK 6.0.428, got {version}")
     args.output.mkdir(parents=True, exist_ok=False)
     result = {"sdk": version, "deployed": False, "helpers": []}
-    sources = SOURCES | {
-        launchpad_routing.NAME + ".cs": launchpad_routing.SOURCE,
-        launchpad_routing.NAME + ".csproj": launchpad_routing.PROJECT,
-        quiet_hours_worker.NAME + ".cs": quiet_hours_worker.SOURCE,
-        quiet_hours_worker.NAME + ".csproj": quiet_hours_worker.PROJECT,
-    }
-    for name in (
-        "SamsungTvArchiveRoot",
-        "SamsungTvRootAgent",
-        "OwnerExec",
-        "HomeSourceReadout",
-        launchpad_routing.NAME,
-        quiet_hours_worker.NAME,
-    ):
+    for name in ("SamsungTvArchiveRoot", "SamsungTvRootAgent", "OwnerExec"):
         project = args.output / name
         project.mkdir()
         for suffix in (".cs", ".csproj"):
-            (project / (name + suffix)).write_text(sources[name + suffix])
+            (project / (name + suffix)).write_text(SOURCES[name + suffix])
         subprocess.run(
             [
                 str(dotnet),
@@ -83,12 +69,7 @@ def main():
             "sha256": hashlib.sha256(data).hexdigest(),
             "matches_checked_in_asset": data == baseline.read_bytes(),
         }
-        if name in (
-            "OwnerExec",
-            "HomeSourceReadout",
-            launchpad_routing.NAME,
-            quiet_hours_worker.NAME,
-        ):
+        if name == "OwnerExec":
             runtimeconfig = name + ".runtimeconfig.json"
             config_data = (project / "out" / runtimeconfig).read_bytes()
             config_baseline = ROOT / "tools/assets/payloads" / runtimeconfig
@@ -97,7 +78,7 @@ def main():
                 config_data == config_baseline.read_bytes()
             )
         result["helpers"].append(helper)
-    # Non-Frame launcher profiles carry a routing helper compiled for their build.
+    # Each profile carries a routing helper compiled for its build.
     for profile in sorted((ROOT / "tools/profiles").glob("*.json")):
         policy = json.loads(profile.read_text())
         pins = policy.get("launchpad")

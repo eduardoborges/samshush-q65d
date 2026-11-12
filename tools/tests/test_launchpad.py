@@ -18,11 +18,11 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import frame  # noqa: E402
-import home  # noqa: E402
 import launchpad  # noqa: E402
 import launchpad_routing  # noqa: E402
 
 Q65D_BUILD = "T-NKLDUABC-0090-REL-202603190159"
+OTHER_BUILD = "T-OTHERBLD-0090-REL-202601010000"
 Q65D_HASHES = {path: "d" * 64 for path in launchpad_routing.HASHES}
 
 WEATHER_MANIFEST = b"""<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="https://example.invalid/shortcuts" version="0.2.0">
@@ -812,7 +812,7 @@ class LaunchpadDeviceTests(unittest.TestCase):
             (self.assets / "payloads" / (launchpad_routing.NAME + suffix)).write_bytes(
                 b"helper fixture"
             )
-        self.route_build = home.BUILD
+        self.route_build = Q65D_BUILD
         self.layouts = self.root / "layouts"
         self.layouts.mkdir()
         self.routing_calls = []
@@ -839,9 +839,9 @@ class LaunchpadDeviceTests(unittest.TestCase):
         self.journal_raw = None
         self.fake_frame = SimpleNamespace(
             ASSETS=self.assets,
-            policy=lambda: {"build": home.BUILD, "model": home.MODEL},
             check_result=frame.check_result,
         )
+        self.use_q65d()
 
     def route_output(self, operation):
         original = {
@@ -1001,8 +1001,8 @@ class LaunchpadDeviceTests(unittest.TestCase):
                     "launchpad.verify_widget",
                     lambda path, layout=None: verify_widget(path, self.source, layout),
                 ),
-                ("home_layout.verify_model", verify_model),
-                ("home_layout.device_command", lambda script: script),
+                ("launchpad.verify_model", verify_model),
+                ("launchpad.device_command", lambda script: script),
                 ("launchpad_routing.render_script", render),
                 ("samsung_tv_root.archive_root.probe", probe),
                 ("samsung_tv_root.sdb.find_sdb", lambda: "fixture-sdb"),
@@ -1018,16 +1018,17 @@ class LaunchpadDeviceTests(unittest.TestCase):
 
     def use_q65d(self, *, helper_build=Q65D_BUILD):
         helper = self.assets / "payloads" / "q65d-2123"
-        helper.mkdir()
+        helper.mkdir(exist_ok=True)
         (helper / (launchpad_routing.NAME + ".dll")).write_bytes(
             b"q65d helper " + helper_build.encode("utf-16-le")
         )
         (helper / (launchpad_routing.NAME + ".runtimeconfig.json")).write_bytes(b"{}")
         layout = self.layouts / "q65d-2123"
-        layout.mkdir()
+        layout.mkdir(exist_ok=True)
         (layout / "index.html").write_bytes(b"<!doctype html><title>Q65D</title>")
         self.resources["index.html"] = (layout / "index.html").read_bytes()
         write_widget(self.widget, signed_members(self.resources))
+        self.original_widget = self.widget.read_bytes()
         self.route_build = Q65D_BUILD
         policy = {
             "model": "QN55Q65DAGXZD",
@@ -1080,24 +1081,6 @@ class LaunchpadDeviceTests(unittest.TestCase):
         self.assertIn("differs", evidence["error"])
         self.assertFalse(any("mv --" in script for script in self.device_scripts))
 
-    def test_frame_target_keeps_upstream_build_helper_and_model(self):
-        result, evidence = self.run_operation("inspect")
-        self.assertEqual(result, 0, evidence)
-        self.assertEqual(
-            self.routing_targets,
-            [
-                (
-                    home.BUILD,
-                    launchpad_routing.HASHES,
-                    {
-                        ".dll": b"helper fixture",
-                        ".runtimeconfig.json": b"helper fixture",
-                    },
-                )
-            ],
-        )
-        self.assertEqual(self.verified_models, [home.MODEL])
-
     def test_q65d_install_uses_its_build_helper_layout_and_model(self):
         self.use_q65d()
         result, evidence = self.run_operation("install")
@@ -1112,7 +1095,7 @@ class LaunchpadDeviceTests(unittest.TestCase):
         self.assertTrue(build_checks)
         for script in build_checks:
             self.assertIn(f"BUILD_ID={Q65D_BUILD}", script)
-            self.assertNotIn(home.BUILD, script)
+            self.assertNotIn(OTHER_BUILD, script)
 
     def test_q65d_widget_must_carry_its_layout(self):
         self.use_q65d()
@@ -1131,13 +1114,13 @@ class LaunchpadDeviceTests(unittest.TestCase):
     def test_q65d_status_rejects_a_receipt_from_another_build(self):
         self.use_q65d()
         self.initial_phase = "applied"
-        self.route_build = home.BUILD
+        self.route_build = OTHER_BUILD
         result, evidence = self.run_operation("status")
         self.assertEqual(result, 1)
         self.assertIn("Invalid", evidence["error"])
 
     def test_q65d_refuses_a_helper_built_for_another_firmware(self):
-        self.use_q65d(helper_build=home.BUILD)
+        self.use_q65d(helper_build=OTHER_BUILD)
         with self.assertRaisesRegex(ValueError, "another firmware"):
             self.run_operation("inspect")
         self.assertEqual(self.device_scripts, [])
@@ -1503,19 +1486,11 @@ class LaunchTargetTests(unittest.TestCase):
         self.assertNotIn(b"art-mode", files["index.html"])
         frame.verify_files()
 
-    def test_frame_policy_keeps_the_upstream_target(self):
-        target = launchpad.launch_target(
-            {"model": home.MODEL, "build": home.BUILD}, self.assets
-        )
-        self.assertEqual(target.helper, self.assets / "payloads")
-        self.assertIsNone(target.layout)
-        self.assertIs(target.routing_hashes, launchpad_routing.HASHES)
-
     def test_unpinned_or_malformed_profiles_are_refused(self):
         pins = self.policy["launchpad"]
         for policy in (
             {k: v for k, v in self.policy.items() if k != "launchpad"},
-            {"model": home.MODEL, "build": Q65D_BUILD},
+            {"model": "QN55Q65DAGXZD", "build": Q65D_BUILD},
             self.policy | {"launchpad": pins | {"extra": True}},
             self.policy
             | {"launchpad": {k: v for k, v in pins.items() if k != "verification"}},

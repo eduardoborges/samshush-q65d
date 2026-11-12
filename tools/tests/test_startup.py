@@ -107,15 +107,11 @@ else: sys.exit(99)
         (self.root / "worker-state").write_text("inactive")
         self.policy = {
             "build": "test",
-            "certificates": [],
             "voice_privacy": {"systemd_units": ["voice.service"]},
             "optional_controls": {"ads": {"systemd_units": ["ads.service"]}},
         }
-        self.policy["optional_controls"].update(
-            {name: {"systemd_units": []} for name in startup.remove_packages.GROUPS}
-        )
         self.package = startup.bundle(
-            self.policy, lambda action, scope, **kwargs: "true", BASE / "assets"
+            self.policy, lambda action, scope, **kwargs: "true"
         )
         with tarfile.open(fileobj=io.BytesIO(self.package)) as archive:
             files = {
@@ -219,18 +215,6 @@ else: sys.exit(99)
         self.assertEqual(self.hook.read_bytes(), self.original)
         self.assertFalse(self.boot.exists())
 
-    def test_quiet_hours_requires_its_own_removal_before_shared_hook_changes(self):
-        quiet = self.device / "opt/usr/share/samshush-quiet-hours-v1"
-        quiet.mkdir()
-        self.assertIn("Remove Art quiet hours", self.action("install").stderr)
-        quiet.rmdir()
-        self.install()
-        installed = self.hook.read_bytes()
-        quiet.mkdir()
-        self.assertIn("Remove Art quiet hours", self.action("remove").stderr)
-        self.assertEqual(self.hook.read_bytes(), installed)
-        self.assertTrue((self.boot / "installed").is_file())
-
     def test_rejects_partial_or_different_scope_without_touching_hook(self):
         for complete, unit in ((False, "voice.service"), (True, "unreviewed.service")):
             with self.subTest(complete=complete):
@@ -286,23 +270,6 @@ else: sys.exit(99)
                 f"{hashlib.sha256((self.boot / name).read_bytes()).hexdigest()}  {name}\n"
                 for name in names
             )
-        )
-
-    def test_worker_reports_returned_or_incomplete_package_removal(self):
-        self.install()
-        receipt = self.device / "opt/usr/share/samshush-removals-v1"
-        receipt.mkdir()
-        self.replace_installed(
-            "packages.status", "echo 'Package registered again' >&2; exit 1\n"
-        )
-        worker = startup.substitute(startup.COMMON + startup.WORKER, "test")
-        result = self.run_shell(worker)
-        self.assertNotEqual(result.returncode, 0)
-        log = (self.device / "run/samshush-boot.log").read_text()
-        self.assertIn("Package registered again", log)
-        self.assertNotIn("STARTUP COMPLETE", log)
-        self.assertEqual(
-            (self.device / "run/samshush-boot.result").read_text(), "boot-one 1\n"
         )
 
     def test_worker_applies_once_after_boot_and_rejects_partial_apply(self):
@@ -430,7 +397,7 @@ exit 0
         self.assertEqual(self.run_shell(launch).returncode, 4)
 
     def test_bundle_scripts_have_valid_shell_and_short_interpreter_line(self):
-        package = startup.bundle(frame.policy(), frame.render, frame.ASSETS)
+        package = startup.bundle(frame.policy(), frame.render)
         with tarfile.open(fileobj=io.BytesIO(package)) as archive:
             for member in archive.getmembers():
                 if member.name in ("worker", "launch") or member.name.endswith(
@@ -454,18 +421,18 @@ exit 0
         self,
     ):
         policy = frame.policy()
-        package = startup.bundle(policy, frame.render, frame.ASSETS)
+        package = startup.bundle(policy, frame.render)
         with tarfile.open(fileobj=io.BytesIO(package)) as archive:
             rows = archive.extractfile("candidates").read().decode().splitlines()
         names = [row.split("\t")[0] for row in rows]
-        self.assertEqual(names[:2], ["visual-analysis", "optional-delivery"])
-        expected = ["voice", "certificates"] + [
+        self.assertEqual(names[0], "optional-delivery")
+        expected = ["voice"] + [
             name
             for name, entry in policy["optional_controls"].items()
             if entry["systemd_units"]
         ]
         self.assertCountEqual(names, expected)
         self.assertEqual(
-            names[2:],
-            [name for name in expected if name not in names[:2]],
+            names[1:],
+            [name for name in expected if name != "optional-delivery"],
         )
